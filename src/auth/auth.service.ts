@@ -22,7 +22,8 @@ export class AuthService {
 
   //en el register resivimos el registerDto que se comporta como RegisterDto
   async register(registerDto: RegisterDto) {
-    const { name, email, password } = registerDto;
+    const { name, email, password, code, phone, firstName, middleName } =
+      registerDto;
 
     // Verificar si el usuario ya existe
     const userExists = await this.usersService.findOneByEmail(email);
@@ -38,6 +39,10 @@ export class AuthService {
       name,
       email,
       password: hashedPassword,
+      code,
+      phone,
+      firstName,
+      middleName,
       empresa: null, // La empresa se asignará después de crear el pago
     };
 

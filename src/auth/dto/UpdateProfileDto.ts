@@ -21,15 +21,20 @@ export class UpdateProfileDto {
   @ApiProperty()
   @IsOptional()
   @IsString()
-  nbPrimerApellido?: string;
+  code?: string;
 
   @ApiProperty()
   @IsOptional()
   @IsString()
-  nbSegundoApellido?: string;
+  phone?: string;
 
   @ApiProperty()
   @IsOptional()
   @IsString()
-  numTelefonoCelular?: string;
+  firstName?: string;
+
+  @ApiProperty()
+  @IsOptional()
+  @IsString()
+  middleName?: string;
 }

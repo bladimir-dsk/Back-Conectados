@@ -35,6 +35,18 @@ export class User {
   @Column({ type: 'enum', default: Role.ESTUDIANTE, enum: Role }) //tipamos enum para que solo pueda resivir los tipos de roles del enum
   role: Role;
 
+  @Column({ nullable: true })
+  code: string;
+
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
+  firstName: string;
+
+  @Column({ nullable: true })
+  middleName: string;
+
   //deletedatecolumn es para hacer eliminaciones logicas y no fisicas en la base de datos
   @DeleteDateColumn()
   deletedAt: Date;
