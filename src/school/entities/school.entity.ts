@@ -30,10 +30,10 @@ export class School {
   level: NivelEducativo;
 
   @Column({ type: 'double precision' })
-  latitude: number;
+  latitud: number;
 
   @Column({ type: 'double precision' })
-  length: number;
+  longitud: number;
 
   @Column({ type: 'enum', enum: TipoEscuela })
   type: TipoEscuela;

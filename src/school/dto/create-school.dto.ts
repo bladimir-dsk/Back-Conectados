@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+} from 'class-validator';
 import {
   NivelEducativo,
   TipoEscuela,
@@ -22,12 +29,12 @@ export class CreateSchoolDto {
   level: NivelEducativo;
 
   @ApiProperty()
-  @IsNumber()
-  latitude: number;
+  @IsLatitude()
+  latitud: number;
 
   @ApiProperty()
-  @IsNumber()
-  length: number;
+  @IsLongitude()
+  longitud: number;
 
   @ApiProperty()
   @IsEnum(TipoEscuela)
