@@ -12,9 +12,10 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Double,
 } from 'typeorm';
 
-@Entity('escuelas')
+@Entity('School')
 export class School {
   @PrimaryGeneratedColumn()
   id_school: number;
@@ -26,19 +27,19 @@ export class School {
   cct: string;
 
   @Column({ type: 'enum', enum: NivelEducativo })
-  nivel: NivelEducativo;
+  level: NivelEducativo;
 
-  @Column('decimal', { precision: 10, scale: 6 })
-  latitud: number;
+  @Column({ type: 'double precision' })
+  latitude: number;
 
-  @Column('decimal', { precision: 10, scale: 6 })
-  longitud: number;
+  @Column({ type: 'double precision' })
+  length: number;
 
   @Column({ type: 'enum', enum: TipoEscuela })
-  tipo: TipoEscuela;
+  type: TipoEscuela;
 
   @Column({ type: 'enum', enum: TurnoEscuela })
-  turno: TurnoEscuela;
+  turn: TurnoEscuela;
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })

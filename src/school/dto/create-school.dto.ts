@@ -19,21 +19,21 @@ export class CreateSchoolDto {
 
   @ApiProperty()
   @IsEnum(NivelEducativo)
-  nivel: NivelEducativo;
+  level: NivelEducativo;
 
   @ApiProperty()
   @IsNumber()
-  latitud: number;
+  latitude: number;
 
   @ApiProperty()
   @IsNumber()
-  longitud: number;
+  length: number;
 
   @ApiProperty()
   @IsEnum(TipoEscuela)
-  tipo: TipoEscuela;
+  type: TipoEscuela;
 
   @ApiProperty()
   @IsEnum(TurnoEscuela)
-  turno: TurnoEscuela;
+  turn: TurnoEscuela;
 }

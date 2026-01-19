@@ -15,8 +15,12 @@ export class SchoolService {
     @InjectRepository(School)
     private readonly schoolRepository: Repository<School>,
   ) {}
-
-  async create(CreateSchoolDto: CreateSchoolDto) {
+  async create(CreateSchoolDto: CreateSchoolDto, user: UserActiveInterface) {
+    const School = await this.schoolRepository.findOneBy({
+      ...CreateSchoolDto,
+      userEmail: user.email,
+      empresa: { id_empresa: user.id_empresa },
+    });
     return this.schoolRepository.save(CreateSchoolDto);
   }
 

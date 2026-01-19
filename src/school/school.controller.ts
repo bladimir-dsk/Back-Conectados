@@ -28,7 +28,7 @@ export class SchoolController {
     @Body() createSchoolDto: CreateSchoolDto,
     @ActiveUser() user: UserActiveInterface,
   ) {
-    return this.SchoolService.create(createSchoolDto);
+    return this.SchoolService.create(createSchoolDto, user);
   }
 
   @Get()
