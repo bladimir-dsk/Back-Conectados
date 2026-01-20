@@ -16,34 +16,39 @@ export class SchoolService {
     private readonly schoolRepository: Repository<School>,
   ) {}
   async create(CreateSchoolDto: CreateSchoolDto, user: UserActiveInterface) {
-    const School = await this.schoolRepository.findOneBy({
+    const School = await this.schoolRepository.create({
       ...CreateSchoolDto,
       userEmail: user.email,
       empresa: { id_empresa: user.id_empresa },
     });
-    return this.schoolRepository.save(CreateSchoolDto);
+    return this.schoolRepository.save(School);
   }
 
-  findAll() {
-    return this.schoolRepository.find();
+  findAll(user: UserActiveInterface) {
+    return this.schoolRepository.find({
+      where: { empresa: { id_empresa: user.id_empresa } },
+    });
   }
 
-  async findOne(id: number) {
-    const School = await this.schoolRepository.findOneBy({ id_school: id });
+  async findOne(id: number, user: UserActiveInterface) {
+    const School = await this.schoolRepository.findOneBy({
+      id_school: id,
+      empresa: { id_empresa: user.id_empresa },
+    });
     if (!School) {
       throw new BadRequestException('No existe la escuela con ese id');
     }
     return School;
   }
 
-  async update(id: number, updateSchoolDto: UpdateSchoolDto) {
-    const School = await this.schoolRepository.findOneBy({ id_school: id });
-    if (!School) {
-      throw new BadRequestException('No existe la escuela con ese id');
-    }
-    return await this.schoolRepository.update(id, {
-      ...updateSchoolDto,
-    });
+  async update(
+    id: number,
+    updateSchoolDto: UpdateSchoolDto,
+    user: UserActiveInterface,
+  ) {
+    const School = await this.findOne(id, user);
+    Object.assign(School, updateSchoolDto);
+    return this.schoolRepository.save(School);
   }
 
   async remove(id: number, user: UserActiveInterface) {
@@ -52,10 +57,7 @@ export class SchoolService {
         'Solo los usuarios con perfil de Adminitrador pueden acceder a esta información',
       );
     }
-    const School = await this.schoolRepository.findOneBy({ id_school: id });
-    if (!School) {
-      throw new BadRequestException('No existe la escuela con ese id');
-    }
-    return await this.schoolRepository.remove(School);
+    const School = await this.findOne(id, user);
+    return this.schoolRepository.remove(School);
   }
 }

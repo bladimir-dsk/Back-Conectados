@@ -33,23 +33,28 @@ export class SchoolController {
 
   @Get()
   @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
-  findAll() {
-    return this.SchoolService.findAll();
+  findAll(@ActiveUser() user: UserActiveInterface) {
+    return this.SchoolService.findAll(user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.SchoolService.findOne(+id);
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
+  findOne(@Param('id') id: string, @ActiveUser() user: UserActiveInterface) {
+    return this.SchoolService.findOne(+id, user);
   }
 
-  @Auth(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSchoolDto: UpdateSchoolDto) {
-    return this.SchoolService.update(+id, updateSchoolDto);
+  @Auth(Role.ADMIN)
+  update(
+    @Param('id') id: string,
+    @Body() updateSchoolDto: UpdateSchoolDto,
+    @ActiveUser() user: UserActiveInterface,
+  ) {
+    return this.SchoolService.update(+id, updateSchoolDto, user);
   }
 
-  @Auth(Role.ADMIN)
   @Delete(':id')
+  @Auth(Role.ADMIN)
   remove(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {
     return this.SchoolService.remove(+id, user);
   }
