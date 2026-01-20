@@ -7,6 +7,7 @@ import * as dotenv from 'dotenv';
 import { ConfigModule } from '@nestjs/config';
 
 import { ScheduleModule } from '@nestjs/schedule';
+import { SchoolModule } from './school/school.module';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ dotenv.config();
     UsersModule,
     AuthModule,
     EmpresaModule,
+    SchoolModule,
   ],
   controllers: [],
   providers: [],
