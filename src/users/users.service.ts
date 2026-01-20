@@ -8,6 +8,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Role } from 'src/common/enums/rol.enum';
 import * as bcryptjs from 'bcryptjs';
+import { School } from 'src/school/entities/school.entity';
 
 @Injectable()
 export class UsersService {
@@ -16,6 +17,8 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Empresa)
     private readonly empresaRepository: Repository<Empresa>,
+    @InjectRepository(School)
+    private readonly schoolRepository: Repository<School>,
   ) {}
 
   create(createUserDto: CreateUserDto) {
@@ -79,11 +82,31 @@ export class UsersService {
     // Verificar si el usuario existe
     const user = await this.usersRepository.findOne({
       where: { id },
-      relations: ['empresa', 'perfil'], // Agregamos la relación perfil para manejarla
+      relations: ['empresa', 'perfil', 'School'], // Agregamos la relación perfil para manejarla
     });
 
     if (!user) {
       throw new BadRequestException('Usuario no encontrado');
+    }
+
+    // Relacion con school
+    if (updateUserDto.id_school !== undefined) {
+      // Solo estudiantes
+      if (user.role !== Role.ESTUDIANTE) {
+        throw new BadRequestException(
+          'Solo los estudiantes pueden tener escuela',
+        );
+      }
+
+      const School = await this.schoolRepository.findOne({
+        where: { id_school: updateUserDto.id_school },
+      });
+
+      if (!School) {
+        throw new BadRequestException('Escuela no encontrada');
+      }
+
+      user.School = School;
     }
 
     // Crear objeto para actualizar
@@ -136,6 +159,11 @@ export class UsersService {
       }
 
       await queryRunner.commitTransaction();
+
+      // Guardar relación School si se asignó
+      if (user.School) {
+        await this.usersRepository.save(user);
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction();
       console.error('Error durante la actualización:', error);

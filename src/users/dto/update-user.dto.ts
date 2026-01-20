@@ -3,6 +3,7 @@ import { CreateUserDto } from './create-user.dto';
 import {
   IsEmail,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   MinLength,
@@ -39,4 +40,8 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   role?: Role;
+
+  @IsOptional()
+  @IsNumber()
+  id_school?: number;
 }

@@ -1,6 +1,7 @@
 //no usemos el src/../commo.....-- usaremos de manejar puras rutas relativas usando el ../../coommon
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { Role } from '../../common/enums/rol.enum';
+import { School } from 'src/school/entities/school.entity';
 import {
   Column,
   CreateDateColumn,
@@ -59,4 +60,8 @@ export class User {
   })
   @JoinColumn({ name: 'id_empresa' })
   empresa: Empresa;
+
+  @ManyToOne(() => School, { nullable: true })
+  @JoinColumn({ name: 'id_school' })
+  School?: School;
 }

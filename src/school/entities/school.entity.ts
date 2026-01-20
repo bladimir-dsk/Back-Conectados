@@ -60,5 +60,8 @@ export class School {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToMany(() => User, (user) => user.School)
+  School?: School;
 }
 export { NivelEducativo, TipoEscuela, TurnoEscuela };
