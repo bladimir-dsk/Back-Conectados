@@ -3,11 +3,13 @@ import { CreateUserDto } from './create-user.dto';
 import {
   IsEmail,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
 import { Role } from 'src/common/enums/rol.enum';
+import { School } from 'src/school/entities/school.entity';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
@@ -39,4 +41,8 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   role?: Role;
+
+  @IsOptional()
+  @IsNumber()
+  id_school?: number;
 }
