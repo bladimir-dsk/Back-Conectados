@@ -82,13 +82,14 @@ export class UsersService {
     // Verificar si el usuario existe
     const user = await this.usersRepository.findOne({
       where: { id },
-      relations: ['empresa', 'perfil, School'], // Agregamos la relación perfil para manejarla
+      relations: ['empresa', 'School'], // Agregamos la relación perfil para manejarla
     });
 
     if (!user) {
       throw new BadRequestException('Usuario no encontrado');
     }
 
+    // Actualizar o agregar la escuela a los estudiantes
     if (updateUserDto.id_school !== undefined) {
       if (user.role !== Role.ESTUDIANTE) {
         throw new BadRequestException(
@@ -103,6 +104,7 @@ export class UsersService {
       }
       user.School = School;
     }
+
     // Crear objeto para actualizar
     const updateData: any = {};
 
@@ -151,13 +153,11 @@ export class UsersService {
       } else {
         console.log('No hay datos para actualizar'); // Debug log
       }
-
-      await queryRunner.commitTransaction();
-
       // Guardar relación School si se asignó
       if (user.School) {
-        await this.usersRepository.save(user);
+        await queryRunner.manager.save(user);
       }
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       console.error('Error durante la actualización:', error);
@@ -169,7 +169,7 @@ export class UsersService {
     // Retornar el usuario actualizado
     return await this.usersRepository.findOne({
       where: { id },
-      relations: ['empresa'],
+      relations: ['empresa','School'],
     });
   }
 
