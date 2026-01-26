@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
   IsPositive,
   IsNumber,
   IsInt,
-  IsEmail,
 } from 'class-validator';
 
 export class CreatePlanVigenciaDto {
@@ -25,22 +25,8 @@ export class CreatePlanVigenciaDto {
   duration: number;
 
   @ApiProperty()
-  @IsString()
-  @IsEmail()
-  userEmail: string;
-
-  @ApiProperty()
-  @IsInt()
-  @IsPositive()
-  id_alojamiento: number;
-
-  @ApiProperty()
+  @Type(() => Number)
   @IsInt()
   @IsPositive()
   id_plan: number;
-
-  @ApiProperty()
-  @IsInt()
-  @IsPositive()
-  id_empresa: number;
 }

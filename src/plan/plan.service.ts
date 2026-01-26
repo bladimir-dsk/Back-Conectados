@@ -11,8 +11,13 @@ export class PlanService {
     @InjectRepository(Plan) private planRepository: Repository<Plan>,
   ) {}
 
-  async create(createPlanDto: CreatePlanDto) {
-    const plan = await this.planRepository.save(createPlanDto);
+  async create(createPlanDto: CreatePlanDto, user: any) {
+    const plan = await this.planRepository.create({
+      name: createPlanDto.name,
+      description: createPlanDto.description,
+      userEmail: user.email,
+      empresa: { id_empresa: user.id_empresa },
+    });
     return this.planRepository.save(plan);
   }
 

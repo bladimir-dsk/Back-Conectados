@@ -4,11 +4,10 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  JoinColumn,
 } from 'typeorm';
 import { Plan } from 'src/plan/entities/plan.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
-import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
-import e from 'express';
 
 @Entity('plan_vigencia')
 export class PlanVigencia {
@@ -24,9 +23,6 @@ export class PlanVigencia {
   @Column()
   duration: number;
 
-  @Column()
-  userEmail: string;
-
   @CreateDateColumn()
   createdAt: Date;
 
@@ -34,14 +30,15 @@ export class PlanVigencia {
   updatedAt: Date;
 
   //Relaciones
-  @ManyToOne(() => Alojamiento, (alojamiento) => alojamiento.planesVigencia, {
-    onDelete: 'CASCADE',
-  })
-  alojamiento: Alojamiento;
 
   @ManyToOne(() => Plan)
+  @JoinColumn({ name: 'id_plan' })
   plan: Plan;
 
   @ManyToOne(() => Empresa)
+  @JoinColumn({ name: 'id_empresa' })
   empresa: Empresa;
+
+  @Column({ nullable: true })
+  userEmail: string;
 }

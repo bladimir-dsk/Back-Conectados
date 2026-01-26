@@ -1,8 +1,14 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { Empresa } from 'src/empresa/entities/empresa.entity';
 
 @Entity('planes')
 export class Plan {
-
   @PrimaryGeneratedColumn()
   id_plan: number;
 
@@ -11,4 +17,11 @@ export class Plan {
 
   @Column({ type: 'text' })
   description: string;
+
+  @ManyToOne(() => Empresa)
+  @JoinColumn({ name: 'id_empresa' })
+  empresa: Empresa;
+
+  @Column({ nullable: true })
+  userEmail: string;
 }

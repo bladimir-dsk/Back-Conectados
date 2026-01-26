@@ -7,7 +7,6 @@ import { Repository } from 'typeorm';
 
 @Injectable()
 export class AlojamientoService {
-
   constructor(
     @InjectRepository(Alojamiento)
     private readonly alojamientoRepository: Repository<Alojamiento>,
@@ -19,13 +18,13 @@ export class AlojamientoService {
   }
 
   async findAll() {
-    return this.alojamientoRepository.find({
-      relations: ['planesVigencia'],
-    });
+    return this.alojamientoRepository.find();
   }
 
   async findOne(id: number) {
-    const alojamiento = await this.alojamientoRepository.findOne({ where: { id_alojamiento: id   }, relations: ['planesVigencia'] });
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: { id_alojamiento: id },
+    });
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }

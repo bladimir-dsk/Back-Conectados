@@ -13,66 +13,56 @@ export class PlanVigenciaService {
   constructor(
     @InjectRepository(PlanVigencia)
     private readonly planVigenciaRepository: Repository<PlanVigencia>,
-
-    @InjectRepository(Alojamiento)
-    private readonly alojamientoRepository: Repository<Alojamiento>,
-
-    @InjectRepository(Plan)
-    private readonly planRepository: Repository<Plan>,
-
-    @InjectRepository(Empresa)
-    private readonly empresaRepository: Repository<Empresa>,
+    @InjectRepository(Plan) private readonly planRepository: Repository<Plan>,
   ) {}
 
-  async create(createPlanVigenciaDto: CreatePlanVigenciaDto) {
-    const alojamiento = await this.alojamientoRepository.findOneBy({
-      id_alojamiento: createPlanVigenciaDto.id_alojamiento,
-    });
-    if (!alojamiento) {
-      throw new NotFoundException('Alojamiento no encontrado');
-    }
-    const plan = await this.planRepository.findOneBy({
-      id_plan: createPlanVigenciaDto.id_plan,
+  async create(createPlanVigenciaDto: CreatePlanVigenciaDto, user: any) {
+    const plan = await this.planRepository.findOne({
+      where: {
+        id_plan: createPlanVigenciaDto.id_plan,
+        empresa: { id_empresa: user.id_empresa },
+      },
+      relations: ['empresa'],
     });
     if (!plan) {
-      throw new NotFoundException('Plan no encontrado');
-    }
-    const empresa = await this.empresaRepository.findOneBy({
-      id_empresa: createPlanVigenciaDto.id_empresa,
-    });
-    if (!empresa) {
-      throw new NotFoundException('Empresa no encontrada');
+      throw new NotFoundException(`Plan no encontrado`);
     }
     const planVigencia = this.planVigenciaRepository.create({
       name: createPlanVigenciaDto.name,
       price: createPlanVigenciaDto.price,
       duration: createPlanVigenciaDto.duration,
-      userEmail: createPlanVigenciaDto.userEmail,
-      alojamiento,
       plan,
-      empresa,
+      empresa: plan.empresa,
+      userEmail: user.email,
     });
     return this.planVigenciaRepository.save(planVigencia);
   }
 
   findAll() {
     return this.planVigenciaRepository.find({
-      relations: ['alojamiento', 'plan', 'empresa'],
+      relations: ['plan', 'empresa'],
     });
   }
 
   findOne(id: number) {
     return this.planVigenciaRepository.findOne({
       where: { id_PlanVigencia: id },
-      relations: ['alojamiento', 'plan', 'empresa'],
+      relations: ['plan', 'empresa'],
     });
   }
 
-  update(id: number, updatePlanVigenciaDto: UpdatePlanVigenciaDto) {
-    return this.planVigenciaRepository.update(
-      { id_PlanVigencia: id },
-      updatePlanVigenciaDto,
-    );
+  async update(id: number, updatePlanVigenciaDto: UpdatePlanVigenciaDto) {
+    const planVigencia = await this.planVigenciaRepository.findOne({
+      where: { id_PlanVigencia: id },
+    });
+    if (!planVigencia) {
+      throw new NotFoundException(`Plan no encontrado`);
+    }
+    if (Object.keys(updatePlanVigenciaDto).length === 0) {
+      throw new NotFoundException(`No hay datos para actualizar`);
+    }
+    Object.assign(planVigencia, updatePlanVigenciaDto);
+    return this.planVigenciaRepository.save(planVigencia);
   }
 
   remove(id: number) {
