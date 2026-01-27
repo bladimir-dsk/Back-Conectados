@@ -11,6 +11,7 @@ import { SchoolModule } from './school/school.module';
 import { AlojamientoModule } from './alojamiento/alojamiento.module';
 import { PlanModule } from './plan/plan.module';
 import { PlanVigenciaModule } from './plan-vigencia/plan-vigencia.module';
+import { ServiciosModule } from './servicios/servicios.module';
 
 dotenv.config();
 
@@ -47,6 +48,7 @@ dotenv.config();
     AlojamientoModule,
     PlanModule,
     PlanVigenciaModule,
+    ServiciosModule,
   ],
   controllers: [],
   providers: [],
