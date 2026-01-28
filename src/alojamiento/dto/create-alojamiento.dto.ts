@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsArray,IsString, IsNumber, IsUrl } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsNotEmpty,
+  IsArray,
+  IsString,
+  IsNumber,
+  IsUrl,
+  IsOptional,
+  IsInt,
+} from 'class-validator';
 
 export class CreateAlojamientoDto {
   @ApiProperty()
@@ -21,16 +30,18 @@ export class CreateAlojamientoDto {
   gender: string;
 
   @ApiProperty()
-  @IsArray()
-  @IsString({ each: true })
-  FreeService: string[];
-
-  @ApiProperty()
-  @IsArray()
-  @IsString({ each: true })
-  PaidService: string[];
-
-  @ApiProperty()
   @IsNumber()
   qualification: number;
+
+  @ApiProperty()
+  @IsInt()
+  id_PlanVigencia: number;
+
+  @ApiProperty({
+    type: [Number],
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  id_servicio?: number[];
 }

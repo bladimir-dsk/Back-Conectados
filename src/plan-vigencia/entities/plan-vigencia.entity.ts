@@ -3,10 +3,12 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   CreateDateColumn,
   JoinColumn,
 } from 'typeorm';
 import { Plan } from 'src/plan/entities/plan.entity';
+import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 
 @Entity('plan_vigencia')
@@ -41,4 +43,7 @@ export class PlanVigencia {
 
   @Column({ nullable: true })
   userEmail: string;
+
+  @OneToMany(() => Alojamiento, (alojamiento) => alojamiento.planVigencia)
+  alojamientos: Alojamiento[];
 }

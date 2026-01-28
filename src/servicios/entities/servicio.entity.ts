@@ -1,12 +1,13 @@
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { User } from 'src/users/entities/user.entity';
-
+import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import {
   Column,
   Entity,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  ManyToMany,
 } from 'typeorm';
 
 @Entity('servicios')
@@ -39,4 +40,7 @@ export class Servicio {
   @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userEmail', referencedColumnName: 'email' })
   user: User;
+
+  @ManyToMany(() => Alojamiento, (alojamiento) => alojamiento.servicios)
+  alojamientos: Alojamiento[];
 }
