@@ -7,6 +7,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlanVigencia } from './entities/plan-vigencia.entity';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 
 @Injectable()
 export class PlanVigenciaService {
@@ -16,7 +17,10 @@ export class PlanVigenciaService {
     @InjectRepository(Plan) private readonly planRepository: Repository<Plan>,
   ) {}
 
-  async create(createPlanVigenciaDto: CreatePlanVigenciaDto, user: any) {
+  async create(
+    createPlanVigenciaDto: CreatePlanVigenciaDto,
+    user: UserActiveInterface,
+  ) {
     const plan = await this.planRepository.findOne({
       where: {
         id_plan: createPlanVigenciaDto.id_plan,

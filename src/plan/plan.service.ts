@@ -4,6 +4,7 @@ import { UpdatePlanDto } from './dto/update-plan.dto';
 import { Plan } from './entities/plan.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 
 @Injectable()
 export class PlanService {
@@ -11,7 +12,7 @@ export class PlanService {
     @InjectRepository(Plan) private planRepository: Repository<Plan>,
   ) {}
 
-  async create(createPlanDto: CreatePlanDto, user: any) {
+  async create(createPlanDto: CreatePlanDto, user: UserActiveInterface) {
     const plan = await this.planRepository.create({
       name: createPlanDto.name,
       description: createPlanDto.description,
