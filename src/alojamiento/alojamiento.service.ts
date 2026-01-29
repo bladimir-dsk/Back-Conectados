@@ -139,8 +139,48 @@ export class AlojamientoService {
     updateAlojamientoDto: UpdateAlojamientoDto,
     user: UserActiveInterface,
   ) {
-    const alojamiento = await this.findOne(id, user);
-    Object.assign(alojamiento, updateAlojamientoDto);
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: {
+        id_alojamiento: id,
+        empresa: {
+          id_empresa: user.id_empresa,
+        },
+      },
+      relations: ['servicios', 'planVigencia'],
+    });
+    if (!alojamiento) {
+      throw new NotAcceptableException('Alojamiento no encontrado');
+    }
+
+    // Actualizar los servicios del alojamiento
+    if (updateAlojamientoDto.id_servicio) {
+      const servicios = await this.servicioRepository.findBy({
+        id_servicio: In(updateAlojamientoDto.id_servicio),
+      });
+      if (servicios.length !== updateAlojamientoDto.id_servicio.length) {
+        throw new NotAcceptableException('Servicio no encontrado');
+      }
+      alojamiento.servicios = servicios;
+    }
+
+    // Actualizar el plan de vigencia del alojamiento
+    if (updateAlojamientoDto.id_PlanVigencia) {
+      const planVigencia = await this.planVigenciaRepository.findOne({
+        where: {
+          id_PlanVigencia: updateAlojamientoDto.id_PlanVigencia,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
+        },
+      });
+      if (!planVigencia) {
+        throw new NotAcceptableException('Plan vigencia no encontrado');
+      }
+      alojamiento.planVigencia = planVigencia;
+    }
+
+    const { name, url, type, gender, qualification } = updateAlojamientoDto;
+    Object.assign(alojamiento, { name, url, type, gender, qualification });
     return this.alojamientoRepository.save(alojamiento);
   }
 
