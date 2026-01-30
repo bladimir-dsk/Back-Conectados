@@ -3,8 +3,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 export const setupSwagger = (app: INestApplication) => {
   const config = new DocumentBuilder()
-    .setTitle('APP SIAGROSIS API REST')
-    .setDescription('Apis para el sistema de siagro')
+    .setTitle('APP CONECTADOS API REST')
+    .setDescription('Apis para el sistema de conectados')
     .setVersion('1.0')
     .addBearerAuth(
       {
