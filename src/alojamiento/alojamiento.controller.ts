@@ -10,13 +10,12 @@ import {
 import { AlojamientoService } from './alojamiento.service';
 import { CreateAlojamientoDto } from './dto/create-alojamiento.dto';
 import { UpdateAlojamientoDto } from './dto/update-alojamiento.dto';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Role } from 'src/common/enums/rol.enum';
 import { ActiveUser } from 'src/common/decorators/active-user.decorator';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Query } from '@nestjs/common';
-
 @ApiBearerAuth('jwt')
 @ApiTags('Alojamientos')
 @Controller('alojamientos')
@@ -33,16 +32,49 @@ export class AlojamientoController {
   }
 
   @Get()
-  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
+  @Auth([Role.ADMIN, Role.ESTUDIANTE])
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, type: String })
+  @ApiQuery({ name: 'gender', required: false, type: String })
   findAll(
-    @Query('page') page: string,
-    @Query('limit') limit: string,
-    @Query('type') type: string,
-    @Query('gender') gender: string,
     @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('type') type?: string,
+    @Query('gender') gender?: string,
   ) {
     return this.alojamientoService.findAll(
-      { page: Number(page), limit: Number(limit), type, gender },
+      {
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+        type,
+        gender,
+      },
+      user,
+    );
+  }
+
+  @Get('propietario')
+  @Auth(Role.PROPIETARIO)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, type: String })
+  @ApiQuery({ name: 'gender', required: false, type: String })
+  findAllPropietario(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('type') type?: string,
+    @Query('gender') gender?: string,
+  ) {
+    return this.alojamientoService.findAllPropietario(
+      {
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+        type,
+        gender,
+      },
       user,
     );
   }

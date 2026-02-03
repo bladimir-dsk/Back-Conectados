@@ -23,7 +23,7 @@ export class Alojamiento {
   @Column({ length: 150 })
   name: string;
 
-  @Column({ unique: true })
+  @Column()
   url: string;
 
   @Column({ length: 150 })
