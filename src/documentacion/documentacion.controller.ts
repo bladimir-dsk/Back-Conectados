@@ -17,7 +17,6 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Role } from 'src/common/enums/rol.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { User } from 'src/users/entities/user.entity';
 
 @ApiBearerAuth('jwt')
 @ApiTags('Documentacion')
@@ -28,8 +27,12 @@ export class DocumentacionController {
   @Post('upload')
   @Auth(Role.ESTUDIANTE)
   @UseInterceptors(FileInterceptor('file'))
-  async upload(@UploadedFile() file: Express.Multer.File, @Req() req) {
-    return this.documentacionService.upload(file, req.user);
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req,
+    @Body() body: CreateDocumentacionDto,
+  ) {
+    return this.documentacionService.upload(file, req.user, body);
   }
 
   @Post('upload/:userId')
@@ -39,9 +42,14 @@ export class DocumentacionController {
   async uploadForUser(
     @UploadedFile() file: Express.Multer.File,
     @Param('userId') userId: string,
+    @Body() createDocumentacionDto: CreateDocumentacionDto,
   ) {
     console.log('FILE CONTROLLER ===>', file);
-    return this.documentacionService.uploadForUser(file, +userId);
+    return this.documentacionService.uploadForUser(
+      file,
+      +userId,
+      createDocumentacionDto,
+    );
   }
 
   @Get()

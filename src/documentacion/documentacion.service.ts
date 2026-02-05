@@ -10,9 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Documentacion } from './entities/documentacion.entity';
 import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
-import { SupabaseModule } from 'src/common/supabase/supabase.module';
 import { Role } from 'src/common/enums/rol.enum';
-import { message } from 'antd';
 
 @Injectable()
 export class DocumentacionService {
@@ -24,9 +22,14 @@ export class DocumentacionService {
     @Inject('SUPABASE') private readonly supabase,
   ) {}
 
-  async upload(file: Express.Multer.File, userPayload: any) {
+  async upload(
+    file: Express.Multer.File,
+    userPayload: any,
+    body: CreateDocumentacionDto,
+  ) {
     console.log('FILE:', file);
     console.log('USER PAYLOAD:', userPayload);
+    console.log('BODY:', body);
     if (!file) {
       throw new Error('Archivo no enviado');
     }
@@ -66,6 +69,7 @@ export class DocumentacionService {
       name: file.originalname,
       type: file.mimetype,
       size: file.size,
+      typeDocument: body.typeDocument,
       documentUrl: data.publicUrl,
       userEmail: user.email,
       user,
@@ -74,7 +78,11 @@ export class DocumentacionService {
     return this.documentacionRepository.save(documentacion);
   }
 
-  async uploadForUser(file: Express.Multer.File, userId: number) {
+  async uploadForUser(
+    file: Express.Multer.File,
+    userId: number,
+    createDocumentacionDto: CreateDocumentacionDto,
+  ) {
     if (!file) throw new BadRequestException('Archivo no enviado');
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -83,7 +91,7 @@ export class DocumentacionService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
     console.log('FILE ADMIN ===>', file);
 
-    return this.upload(file, { email: user.email });
+    return this.upload(file, { email: user.email }, createDocumentacionDto);
   }
 
   async findAll(userPayload: any) {

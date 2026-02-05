@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
   Entity,
 } from 'typeorm';
+import { TypeDocuments } from 'src/common/enums/typeDocuments.enum';
 
 @Entity('documentacion')
 export class Documentacion {
@@ -24,6 +25,9 @@ export class Documentacion {
 
   @Column()
   documentUrl: string;
+
+  @Column({ type: 'enum', enum: TypeDocuments })
+  typeDocument: TypeDocuments;
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })
