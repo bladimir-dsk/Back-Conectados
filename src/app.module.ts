@@ -8,6 +8,12 @@ import { ConfigModule } from '@nestjs/config';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchoolModule } from './school/school.module';
+import { AlojamientoModule } from './alojamiento/alojamiento.module';
+import { PlanModule } from './plan/plan.module';
+import { PlanVigenciaModule } from './plan-vigencia/plan-vigencia.module';
+import { ServiciosModule } from './servicios/servicios.module';
+import { PropietariosModule } from './propietarios/propietarios.module';
+import { AlojamientoServiciosModule } from './alojamiento_servicios/alojamiento_servicios.module';
 
 dotenv.config();
 
@@ -41,6 +47,12 @@ dotenv.config();
     AuthModule,
     EmpresaModule,
     SchoolModule,
+    AlojamientoModule,
+    PlanModule,
+    PlanVigenciaModule,
+    ServiciosModule,
+    PropietariosModule,
+    AlojamientoServiciosModule,
   ],
   controllers: [],
   providers: [],

@@ -1,4 +1,5 @@
 import { User } from 'src/users/entities/user.entity';
+import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import {
   Column,
   CreateDateColumn,
@@ -26,4 +27,6 @@ export class Empresa {
 
   @CreateDateColumn()
   createdAt: Date;
+  @OneToMany(() => Alojamiento, (alojamiento) => alojamiento.empresa)
+  alojamientos: Alojamiento[];
 }
