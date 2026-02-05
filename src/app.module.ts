@@ -12,6 +12,7 @@ import { AlojamientoModule } from './alojamiento/alojamiento.module';
 import { PlanModule } from './plan/plan.module';
 import { PlanVigenciaModule } from './plan-vigencia/plan-vigencia.module';
 import { ServiciosModule } from './servicios/servicios.module';
+import { DocumentacionModule } from './documentacion/documentacion.module';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ dotenv.config();
     PlanModule,
     PlanVigenciaModule,
     ServiciosModule,
+    DocumentacionModule,
   ],
   controllers: [],
   providers: [],
