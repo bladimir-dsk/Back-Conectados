@@ -23,7 +23,7 @@ export class ServiciosController {
   constructor(private readonly serviciosService: ServiciosService) {}
 
   @Post()
-  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  @Auth([Role.ADMIN])
   create(
     @Body() createServicioDto: CreateServicioDto,
     @ActiveUser() user: UserActiveInterface,
@@ -37,35 +37,25 @@ export class ServiciosController {
     return this.serviciosService.findAll(user);
   }
 
-  @Get('free')
-  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
-  findFree(@ActiveUser() user: UserActiveInterface) {
-    return this.serviciosService.findFreeServices(user);
-  }
-
-  @Get('paid')
-  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
-  findPaid(@ActiveUser() user: UserActiveInterface) {
-    return this.serviciosService.findPaidServices(user);
-  }
-
   @Get(':id')
   @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
-  @Auth([Role.ADMIN, Role.PROPIETARIO])
   findOne(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {
     return this.serviciosService.findOne(+id, user);
   }
 
   @Patch(':id')
+  @Auth([Role.ADMIN])
   update(
     @Param('id') id: number,
     @Body() updateServicioDto: UpdateServicioDto,
+    @ActiveUser() user: UserActiveInterface,
   ) {
-    return this.serviciosService.update(+id, updateServicioDto);
+    return this.serviciosService.update(+id, updateServicioDto, user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: number) {
-    return this.serviciosService.remove(+id);
+  @Auth([Role.ADMIN])
+  remove(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {
+    return this.serviciosService.remove(+id, user);
   }
 }

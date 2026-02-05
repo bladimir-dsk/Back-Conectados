@@ -61,7 +61,7 @@ export class AuthController {
   // }
 
   @Get('profile') // ruta que nos da acceso dependiendo del rol
-  @Auth(Role.ADMIN) //auth es un decorador que une los guards y los roles
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE]) //auth es un decorador que une los guards y los roles
   profile(@ActiveUser() user: UserActiveInterface) {
     return this.authService.profile(user);
   }
