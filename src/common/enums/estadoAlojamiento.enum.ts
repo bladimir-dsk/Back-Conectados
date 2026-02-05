@@ -1,0 +1,7 @@
+export enum EstadoAlojamiento {
+  ACTIVO = 'ACTIVO',
+  INACTIVO = 'INACTIVO',
+  OCUPADO = 'OCUPADO',
+  MANTENIMIENTO = 'MANTENIMIENTO',
+  PENDIENTE = 'PENDIENTE',
+}

@@ -37,12 +37,12 @@ export class AlojamientoController {
   findAll(
     @Query('page') page: string,
     @Query('limit') limit: string,
-    @Query('type') type: string,
-    @Query('gender') gender: string,
+    // @Query('type') type: string,
+    // @Query('gender') gender: string,
     @ActiveUser() user: UserActiveInterface,
   ) {
     return this.alojamientoService.findAll(
-      { page: Number(page), limit: Number(limit), type, gender },
+      { page: Number(page), limit: Number(limit) },
       user,
     );
   }
