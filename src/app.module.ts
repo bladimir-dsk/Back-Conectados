@@ -15,6 +15,8 @@ import { ServiciosModule } from './servicios/servicios.module';
 import { DocumentacionModule } from './documentacion/documentacion.module';
 import { PropietariosModule } from './propietarios/propietarios.module';
 import { AlojamientoServiciosModule } from './alojamiento_servicios/alojamiento_servicios.module';
+import { CuartosModule } from './cuartos/cuartos.module';
+import { CamasModule } from './camas/camas.module';
 
 dotenv.config();
 
@@ -55,6 +57,8 @@ dotenv.config();
     DocumentacionModule,
     PropietariosModule,
     AlojamientoServiciosModule,
+    CuartosModule,
+    CamasModule,
   ],
   controllers: [],
   providers: [],
