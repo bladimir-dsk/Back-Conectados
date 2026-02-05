@@ -77,34 +77,37 @@ export class ServiciosService {
     return servicio;
   }
 
-  //SERVICIOS PAID
-  async findPaidServices(user: UserActiveInterface) {
-    return this.servicioRepository.find({
+  async update(
+    id: number,
+    updateServicioDto: UpdateServicioDto,
+    user: UserActiveInterface,
+  ) {
+    const servicio = await this.servicioRepository.findOne({
       where: {
+        id_servicio: id,
         empresa: {
           id_empresa: user.id_empresa,
         },
-        aplique_paid: true,
       },
     });
+    if (!servicio) {
+      throw new BadRequestException('Servicio no encontrado');
+    }
+    return this.servicioRepository.update(id, updateServicioDto);
   }
 
-  async findFreeServices(user: UserActiveInterface) {
-    return this.servicioRepository.find({
+  async remove(id: number, user: UserActiveInterface) {
+    const servicio = await this.servicioRepository.findOne({
       where: {
+        id_servicio: id,
         empresa: {
           id_empresa: user.id_empresa,
         },
-        aplique_paid: false,
       },
     });
-  }
-
-  update(id: number, updateServicioDto: UpdateServicioDto) {
-    return `This action updates a #${id} servicio`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} servicio`;
+    if (!servicio) {
+      throw new BadRequestException('Servicio no encontrado');
+    }
+    return this.servicioRepository.remove(servicio);
   }
 }

@@ -12,6 +12,7 @@ import { totalmem, userInfo } from 'node:os';
 import { Role } from 'src/common/enums/rol.enum';
 import { In } from 'typeorm';
 import { ForbiddenException } from '@nestjs/common';
+import { Propietario } from 'src/propietarios/entities/propietario.entity';
 
 @Injectable()
 export class AlojamientoService {
@@ -24,6 +25,8 @@ export class AlojamientoService {
     private readonly empresaRepository: Repository<Empresa>,
     @InjectRepository(PlanVigencia)
     private readonly planVigenciaRepository: Repository<PlanVigencia>,
+    @InjectRepository(Propietario)
+    private readonly propietarioRepository: Repository<Propietario>,
   ) {}
 
   async create(
@@ -50,11 +53,17 @@ export class AlojamientoService {
     if (!planVigencia) {
       throw new NotAcceptableException('Plan vigencia no encontrado');
     }
-    const servicios = await this.servicioRepository.findBy({
-      id_servicio: In(createAlojamientoDto.id_servicio),
+
+    const propietario = await this.propietarioRepository.findOne({
+      where: {
+        id_propietario: createAlojamientoDto.id_Propietario,
+        empresa: {
+          id_empresa: user.id_empresa,
+        },
+      },
     });
-    if (servicios.length !== createAlojamientoDto.id_servicio.length) {
-      throw new NotAcceptableException('Servicio no encontrado');
+    if (!propietario) {
+      throw new NotAcceptableException('Propietario no encontrado');
     }
 
     const existingAlojamiento = await this.alojamientoRepository.findOne({
@@ -70,14 +79,10 @@ export class AlojamientoService {
     }
 
     const alojamiento = this.alojamientoRepository.create({
-      name: createAlojamientoDto.name,
-      url: createAlojamientoDto.url,
-      type: createAlojamientoDto.type,
-      gender: createAlojamientoDto.gender,
-      qualification: createAlojamientoDto.qualification,
+      ...createAlojamientoDto,
       empresa,
       planVigencia,
-      servicios,
+      propietario,
       userEmail: user.email,
     });
     return this.alojamientoRepository.save(alojamiento);
@@ -87,25 +92,34 @@ export class AlojamientoService {
     query: {
       page?: number;
       limit?: number;
-      type?: string;
-      gender?: string;
+      // type?: string;
+      // gender?: string;
     },
     user: UserActiveInterface,
   ) {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
+
     const where: any = {
       userEmail: user.email,
     };
-    if (query.type) {
-      where.type = query.type;
+
+    if (user.role === Role.PROPIETARIO) {
+      where.propietario = {
+        email: user.email,
+      };
     }
-    if (query.gender) {
-      where.gender = query.gender;
-    }
+
+    // if (query.type) {
+    //   where.type = query.type;
+    // }
+    // if (query.gender) {
+    //   where.gender = query.gender;
+    // }
+
     const [data, total] = await this.alojamientoRepository.findAndCount({
       where,
-      relations: ['servicios', 'planVigencia'],
+      relations: ['servicios', 'planVigencia', 'propietario'],
       take: limit,
       skip: (page - 1) * limit,
     });
@@ -169,17 +183,28 @@ export class AlojamientoService {
   }
 
   async findOne(id: number, user: UserActiveInterface) {
-    const alojamiento = await this.alojamientoRepository.findOne({
-      where: {
-        id_alojamiento: id,
-        empresa: {
-          id_empresa: user.id_empresa,
-        },
+    const whereConditions: any = {
+      id_alojamiento: id,
+      empresa: {
+        id_empresa: user.id_empresa,
       },
+    };
+
+    if (user.role === Role.PROPIETARIO) {
+      whereConditions.propietario = {
+        email: user.email,
+      };
+    }
+
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: whereConditions,
+      relations: ['servicios', 'planVigencia', 'propietario'],
     });
+
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
+
     return alojamiento;
   }
 
@@ -188,31 +213,28 @@ export class AlojamientoService {
     updateAlojamientoDto: UpdateAlojamientoDto,
     user: UserActiveInterface,
   ) {
-    const alojamiento = await this.alojamientoRepository.findOne({
-      where: {
-        id_alojamiento: id,
-        empresa: {
-          id_empresa: user.id_empresa,
-        },
+    const whereConditions: any = {
+      id_alojamiento: id,
+      empresa: {
+        id_empresa: user.id_empresa,
       },
-      relations: ['servicios', 'planVigencia'],
+    };
+
+    if (user.role === Role.PROPIETARIO) {
+      whereConditions.propietario = {
+        email: user.email,
+      };
+    }
+
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: whereConditions,
+      relations: ['servicios', 'planVigencia', 'propietario'],
     });
+
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
 
-    // Actualizar los servicios del alojamiento
-    if (updateAlojamientoDto.id_servicio) {
-      const servicios = await this.servicioRepository.findBy({
-        id_servicio: In(updateAlojamientoDto.id_servicio),
-      });
-      if (servicios.length !== updateAlojamientoDto.id_servicio.length) {
-        throw new NotAcceptableException('Servicio no encontrado');
-      }
-      alojamiento.servicios = servicios;
-    }
-
-    // Actualizar el plan de vigencia del alojamiento
     if (updateAlojamientoDto.id_PlanVigencia) {
       const planVigencia = await this.planVigenciaRepository.findOne({
         where: {
@@ -228,8 +250,60 @@ export class AlojamientoService {
       alojamiento.planVigencia = planVigencia;
     }
 
-    const { name, url, type, gender, qualification } = updateAlojamientoDto;
-    Object.assign(alojamiento, { name, url, type, gender, qualification });
+    if (updateAlojamientoDto.id_Propietario) {
+      if (user.role !== Role.ADMIN) {
+        throw new NotAcceptableException(
+          'No tienes permisos para cambiar el propietario del alojamiento',
+        );
+      }
+
+      const propietario = await this.propietarioRepository.findOne({
+        where: {
+          id_propietario: updateAlojamientoDto.id_Propietario,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
+        },
+      });
+      if (!propietario) {
+        throw new NotAcceptableException('Propietario no encontrado');
+      }
+      alojamiento.propietario = propietario;
+    }
+
+    const {
+      name,
+      url,
+      typeProperty,
+      gender,
+      typeIncome,
+      country,
+      city,
+      codePostal,
+      address,
+      latitude,
+      longitude,
+      description,
+      estatus,
+    } = updateAlojamientoDto;
+
+    Object.assign(alojamiento, {
+      name,
+      url,
+      typeProperty,
+      gender,
+      typeIncome,
+      country,
+      city,
+      codePostal,
+      address,
+      latitude,
+      longitude,
+      description,
+      estatus,
+      userEmail: user.email,
+    });
+
     return this.alojamientoRepository.save(alojamiento);
   }
 

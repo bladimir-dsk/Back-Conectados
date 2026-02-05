@@ -11,9 +11,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  ManyToMany,
-  JoinTable,
+  OneToMany,
 } from 'typeorm';
+import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
+import { Propietario } from 'src/propietarios/entities/propietario.entity';
+import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 
 @Entity('alojamientos')
 export class Alojamiento {
@@ -27,27 +29,48 @@ export class Alojamiento {
   url: string;
 
   @Column({ length: 150 })
-  type: string;
+  typeProperty: string;
 
   @Column({ length: 150 })
   gender: string;
 
-  @Column({ type: 'decimal', precision: 2, scale: 1, default: 0 })
-  qualification: number;
+  @Column()
+  country: string;
 
-  @ManyToMany(() => Servicio, (servicio) => servicio.alojamientos)
-  @JoinTable({
-    name: 'alojamiento_servicio',
-    joinColumn: {
-      name: 'id_alojamiento',
-      referencedColumnName: 'id_alojamiento',
-    },
-    inverseJoinColumn: {
-      name: 'id_servicio',
-      referencedColumnName: 'id_servicio',
-    },
+  @Column()
+  city: string;
+
+  @Column()
+  codePostal: string;
+
+  @Column()
+  address: string;
+
+  @Column()
+  latitude: string;
+
+  @Column()
+  longitude: string;
+
+  @Column()
+  typeIncome: string;
+
+  @Column({
+    type: 'enum',
+    enum: EstadoAlojamiento,
+    default: EstadoAlojamiento.ACTIVO,
   })
-  servicios: Servicio[];
+  estatus: EstadoAlojamiento;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @ManyToOne(() => Propietario, (propietario) => propietario.alojamientos)
+  @JoinColumn({ name: 'id_propietario' })
+  propietario: Propietario;
+
+  @OneToMany(() => AlojamientoServicio, (as) => as.alojamiento)
+  servicios: AlojamientoServicio[];
 
   @ManyToOne(() => PlanVigencia, (planVigencia) => planVigencia.id_PlanVigencia)
   @JoinColumn({ name: 'id_PlanVigencia' })
@@ -59,9 +82,6 @@ export class Alojamiento {
 
   @Column({ nullable: true })
   userEmail: string;
-
-  // @Column()
-  // id_empresas: number;
 
   @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userEmail', referencedColumnName: 'email' })

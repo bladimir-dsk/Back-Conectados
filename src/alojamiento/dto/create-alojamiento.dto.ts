@@ -8,7 +8,9 @@ import {
   IsUrl,
   IsOptional,
   IsInt,
+  IsEnum,
 } from 'class-validator';
+import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 
 export class CreateAlojamientoDto {
   @ApiProperty()
@@ -23,25 +25,54 @@ export class CreateAlojamientoDto {
 
   @ApiProperty()
   @IsString()
-  type: string;
+  typeProperty: string;
 
   @ApiProperty()
   @IsString()
   gender: string;
 
   @ApiProperty()
-  @IsNumber()
-  qualification: number;
+  @IsString()
+  typeIncome: string;
+
+  @ApiProperty()
+  @IsString()
+  country: string;
+
+  @ApiProperty()
+  @IsString()
+  city: string;
+
+  @ApiProperty()
+  @IsString()
+  codePostal: string;
+
+  @ApiProperty()
+  @IsString()
+  address: string;
+
+  @ApiProperty()
+  @IsString()
+  latitude: string;
+
+  @ApiProperty()
+  @IsString()
+  longitude: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty()
+  @IsEnum(EstadoAlojamiento)
+  estatus: EstadoAlojamiento;
 
   @ApiProperty()
   @IsInt()
   id_PlanVigencia: number;
 
-  @ApiProperty({
-    type: [Number],
-  })
-  @IsArray()
-  @IsInt({ each: true })
-  @Type(() => Number)
-  id_servicio?: number[];
+  @ApiProperty()
+  @IsInt()
+  id_Propietario: number;
 }

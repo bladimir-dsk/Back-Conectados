@@ -9,13 +9,4 @@ export class CreateServicioDto {
   @IsString()
   @ApiProperty()
   icon: string;
-
-  @IsBoolean()
-  @ApiProperty()
-  aplique_paid: boolean;
-
-  @IsNumber()
-  @ApiProperty()
-  @IsOptional()
-  price?: number;
 }
