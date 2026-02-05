@@ -8,9 +8,10 @@ import { Servicio } from 'src/servicios/entities/servicio.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { PlanVigencia } from 'src/plan-vigencia/entities/plan-vigencia.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
-import { userInfo } from 'node:os';
+import { totalmem, userInfo } from 'node:os';
 import { Role } from 'src/common/enums/rol.enum';
 import { In } from 'typeorm';
+import { ForbiddenException } from '@nestjs/common';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 
 @Injectable()
@@ -100,9 +101,7 @@ export class AlojamientoService {
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
 
     const where: any = {
-      empresa: {
-        id_empresa: user.id_empresa,
-      },
+      userEmail: user.email,
     };
 
     if (user.role === Role.PROPIETARIO) {
@@ -125,11 +124,61 @@ export class AlojamientoService {
       skip: (page - 1) * limit,
     });
 
+    const totalPages = Math.ceil(total / limit);
     return {
-      page,
       data,
-      total,
-      limit,
+      meta: {
+        totalItems: total,
+        ItemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  async findAllPropietario(
+    query: {
+      page?: number;
+      limit?: number;
+      type?: string;
+      gender?: string;
+    },
+    user: UserActiveInterface,
+  ) {
+    if (user.role !== Role.PROPIETARIO) {
+      throw new ForbiddenException('Acceso denegado');
+    }
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const limit = query.limit && query.limit > 0 ? query.limit : 10;
+    const where: any = {
+      userEmail: user.email,
+    };
+    if (query.type) {
+      where.type = query.type;
+    }
+    if (query.gender) {
+      where.gender = query.gender;
+    }
+    const [data, total] = await this.alojamientoRepository.findAndCount({
+      where,
+      relations: ['servicios', 'planVigencia'],
+      take: limit,
+      skip: (page - 1) * limit,
+    });
+
+    const totalPages = Math.ceil(total / limit);
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        ItemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     };
   }
 
