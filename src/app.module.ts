@@ -15,6 +15,9 @@ import { ServiciosModule } from './servicios/servicios.module';
 import { DocumentacionModule } from './documentacion/documentacion.module';
 import { PropietariosModule } from './propietarios/propietarios.module';
 import { AlojamientoServiciosModule } from './alojamiento_servicios/alojamiento_servicios.module';
+import { AlcanceModule } from './alcance/alcance.module';
+import { TerminosCondicionesModule } from './terminos-condiciones/terminos-condiciones.module';
+import { PoliticaModule } from './politica/politica.module';
 
 dotenv.config();
 
@@ -55,6 +58,9 @@ dotenv.config();
     DocumentacionModule,
     PropietariosModule,
     AlojamientoServiciosModule,
+    AlcanceModule,
+    TerminosCondicionesModule,
+    PoliticaModule,
   ],
   controllers: [],
   providers: [],
