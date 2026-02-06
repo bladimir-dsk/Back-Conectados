@@ -11,6 +11,7 @@ import { Documentacion } from './entities/documentacion.entity';
 import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/common/enums/rol.enum';
+import { EstadoDocumento } from 'src/common/enums/estadoDocumento.enum';
 
 @Injectable()
 export class DocumentacionService {
@@ -158,10 +159,17 @@ export class DocumentacionService {
       .from(process.env.SUPABASE_BUCKET)
       .getPublicUrl(filePath);
 
+    ///si el documento se actualiza el status deve pasar a pendiente
+    if (documentacion.status !== EstadoDocumento.PENDIENTE) {
+      documentacion.status = EstadoDocumento.PENDIENTE;
+    }
+
     documentacion.name = file.originalname;
     documentacion.type = file.mimetype;
     documentacion.size = file.size;
     documentacion.documentUrl = data.publicUrl;
+    documentacion.observation = updateDocumentacionDto.observation;
+    documentacion.status = EstadoDocumento.PENDIENTE;
     Object.assign(documentacion, updateDocumentacionDto);
     return this.documentacionRepository.save(documentacion);
   }
@@ -180,5 +188,57 @@ export class DocumentacionService {
     await this.documentacionRepository.remove(documentacion);
 
     return { message: 'Documentacion eliminada exitosamente' };
+  }
+
+  ///update de estado para que lo cambie el admin
+  async updateEstado(
+    id: number,
+    updateDocumentacionDto: UpdateDocumentacionDto,
+    userPayload: any,
+    file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Archivo no enviado');
+    }
+
+    const documentacion = await this.findOne(id, userPayload);
+
+    const allowedMimeTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `mime type ${file.mimetype} is not supported`,
+      );
+    }
+
+    const filePath = `estudiantes/${userPayload.email}/${Date.now()}-${file.originalname}`;
+
+    const { error } = await this.supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true,
+      });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { data } = this.supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .getPublicUrl(filePath);
+
+    //si el estado es aprovado la observacion es null de nuevo
+    if (updateDocumentacionDto.status === EstadoDocumento.APROBADO) {
+      updateDocumentacionDto.observation = null;
+    }
+
+    documentacion.name = file.originalname;
+    documentacion.type = file.mimetype;
+    documentacion.size = file.size;
+    documentacion.documentUrl = data.publicUrl;
+    documentacion.observation = updateDocumentacionDto.observation;
+    documentacion.status = updateDocumentacionDto.status;
+    Object.assign(documentacion, updateDocumentacionDto);
+    return this.documentacionRepository.save(documentacion);
   }
 }

@@ -82,6 +82,24 @@ export class DocumentacionController {
     );
   }
 
+  @Patch(':id/estado')
+  @Auth(Role.ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  updateEstado(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() updateDocumentacionDto: UpdateDocumentacionDto,
+    @Req() req,
+  ) {
+    console.log('FILE ===>', file);
+    return this.documentacionService.updateEstado(
+      +id,
+      updateDocumentacionDto,
+      req.user,
+      file,
+    );
+  }
+
   @Delete(':id')
   @Auth([Role.ESTUDIANTE, Role.ADMIN])
   remove(@Param('id') id: string, @Req() req) {

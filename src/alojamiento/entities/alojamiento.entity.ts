@@ -16,6 +16,7 @@ import {
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
+import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
 
 @Entity('alojamientos')
 export class Alojamiento {
@@ -64,6 +65,9 @@ export class Alojamiento {
 
   @Column({ nullable: true })
   description: string;
+
+  @OneToMany(() => Cuarto, (cuarto) => cuarto.alojamiento)
+  cuartos: Cuarto[];
 
   @ManyToOne(() => Propietario, (propietario) => propietario.alojamientos)
   @JoinColumn({ name: 'id_propietario' })

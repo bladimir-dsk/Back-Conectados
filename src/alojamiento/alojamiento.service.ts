@@ -8,10 +8,7 @@ import { Servicio } from 'src/servicios/entities/servicio.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { PlanVigencia } from 'src/plan-vigencia/entities/plan-vigencia.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
-import { totalmem, userInfo } from 'node:os';
 import { Role } from 'src/common/enums/rol.enum';
-import { In } from 'typeorm';
-import { ForbiddenException } from '@nestjs/common';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 
 @Injectable()
@@ -101,7 +98,9 @@ export class AlojamientoService {
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
 
     const where: any = {
-      userEmail: user.email,
+      empresa: {
+        id_empresa: user.id_empresa,
+      },
     };
 
     if (user.role === Role.PROPIETARIO) {
@@ -111,7 +110,7 @@ export class AlojamientoService {
     }
 
     // if (query.type) {
-    //   where.type = query.type;
+    //   where.typeProperty = query.type; // ✅ Cambiado de 'type' a 'typeProperty'
     // }
     // if (query.gender) {
     //   where.gender = query.gender;
@@ -120,50 +119,6 @@ export class AlojamientoService {
     const [data, total] = await this.alojamientoRepository.findAndCount({
       where,
       relations: ['servicios', 'planVigencia', 'propietario'],
-      take: limit,
-      skip: (page - 1) * limit,
-    });
-
-    const totalPages = Math.ceil(total / limit);
-    return {
-      data,
-      meta: {
-        totalItems: total,
-        ItemsPerPage: limit,
-        totalPages,
-        currentPage: page,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
-    };
-  }
-
-  async findAllPropietario(
-    query: {
-      page?: number;
-      limit?: number;
-      type?: string;
-      gender?: string;
-    },
-    user: UserActiveInterface,
-  ) {
-    if (user.role !== Role.PROPIETARIO) {
-      throw new ForbiddenException('Acceso denegado');
-    }
-    const page = query.page && query.page > 0 ? query.page : 1;
-    const limit = query.limit && query.limit > 0 ? query.limit : 10;
-    const where: any = {
-      userEmail: user.email,
-    };
-    if (query.type) {
-      where.type = query.type;
-    }
-    if (query.gender) {
-      where.gender = query.gender;
-    }
-    const [data, total] = await this.alojamientoRepository.findAndCount({
-      where,
-      relations: ['servicios', 'planVigencia'],
       take: limit,
       skip: (page - 1) * limit,
     });
@@ -313,5 +268,101 @@ export class AlojamientoService {
     }
     const alojamiento = await this.findOne(id, user);
     return this.alojamientoRepository.remove(alojamiento);
+  }
+
+  // En alojamiento.service.ts
+
+  async findOneWithDetails(id: number, user: UserActiveInterface) {
+    const whereConditions: any = {
+      id_alojamiento: id,
+      empresa: {
+        id_empresa: user.id_empresa,
+      },
+    };
+
+    // 🔐 Si es PROPIETARIO, filtrar solo sus alojamientos
+    if (user.role === Role.PROPIETARIO) {
+      whereConditions.propietario = {
+        email: user.email,
+      };
+    }
+
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: whereConditions,
+      relations: [
+        'propietario',
+        'planVigencia',
+        'servicios',
+        'cuartos', // ✅ Relación con cuartos
+        'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
+      ],
+    });
+
+    if (!alojamiento) {
+      throw new NotAcceptableException(
+        'Alojamiento no encontrado o no tienes permisos',
+      );
+    }
+
+    return alojamiento;
+  }
+
+  async findWithDetails(
+    query: {
+      page?: number;
+      limit?: number;
+    },
+    user: UserActiveInterface,
+  ) {
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const limit = query.limit && query.limit > 0 ? query.limit : 10;
+
+    const whereConditions: any = {
+      empresa: {
+        id_empresa: user.id_empresa,
+      },
+    };
+
+    if (user.role === Role.PROPIETARIO) {
+      whereConditions.propietario = {
+        email: user.email,
+      };
+    }
+
+    const [data, total] = await this.alojamientoRepository.findAndCount({
+      where: whereConditions,
+      relations: [
+        'propietario',
+        'planVigencia',
+        'servicios',
+        'cuartos',
+        'cuartos.camas',
+      ],
+      take: limit,
+      skip: (page - 1) * limit,
+      order: {
+        id_alojamiento: 'DESC', // ✅ Ordenar por más reciente
+        cuartos: {
+          id_cuarto: 'ASC', // ✅ Ordenar cuartos
+          camas: {
+            id_cama: 'ASC', // ✅ Ordenar camas
+          },
+        },
+      },
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
   }
 }
