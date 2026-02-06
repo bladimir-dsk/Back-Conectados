@@ -47,6 +47,28 @@ export class AlojamientoController {
     );
   }
 
+  @Get(':id/details')
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
+  findOneWithDetails(
+    @Param('id') id: string,
+    @ActiveUser() user: UserActiveInterface,
+  ) {
+    return this.alojamientoService.findOneWithDetails(+id, user);
+  }
+
+  @Get('details')
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
+  findMyAlojamientos(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.alojamientoService.findWithDetails(
+      { page: Number(page), limit: Number(limit) },
+      user,
+    );
+  }
+
   @Get(':id')
   @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
   findOne(@Param('id') id: string, @ActiveUser() user: UserActiveInterface) {

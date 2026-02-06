@@ -8,6 +8,7 @@ import {
   Entity,
 } from 'typeorm';
 import { TypeDocuments } from 'src/common/enums/typeDocuments.enum';
+import { EstadoDocumento } from 'src/common/enums/estadoDocumento.enum';
 
 @Entity('documentacion')
 export class Documentacion {
@@ -28,6 +29,17 @@ export class Documentacion {
 
   @Column({ type: 'enum', enum: TypeDocuments })
   typeDocument: TypeDocuments;
+
+  @Column({
+    type: 'enum',
+    enum: EstadoDocumento,
+    default: EstadoDocumento.PENDIENTE,
+    nullable: true,
+  })
+  status: EstadoDocumento;
+
+  @Column({ nullable: true })
+  observation: string;
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })

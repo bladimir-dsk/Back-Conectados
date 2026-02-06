@@ -18,6 +18,8 @@ import { AlojamientoServiciosModule } from './alojamiento_servicios/alojamiento_
 import { AlcanceModule } from './alcance/alcance.module';
 import { TerminosCondicionesModule } from './terminos-condiciones/terminos-condiciones.module';
 import { PoliticaModule } from './politica/politica.module';
+import { CuartosModule } from './cuartos/cuartos.module';
+import { CamasModule } from './camas/camas.module';
 
 dotenv.config();
 
@@ -61,6 +63,8 @@ dotenv.config();
     AlcanceModule,
     TerminosCondicionesModule,
     PoliticaModule,
+    CuartosModule,
+    CamasModule,
   ],
   controllers: [],
   providers: [],
