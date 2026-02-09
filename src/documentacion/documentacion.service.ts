@@ -23,61 +23,66 @@ export class DocumentacionService {
     @Inject('SUPABASE') private readonly supabase,
   ) {}
 
-  async upload(
-    file: Express.Multer.File,
-    userPayload: any,
-    body: CreateDocumentacionDto,
-  ) {
-    console.log('FILE:', file);
-    console.log('USER PAYLOAD:', userPayload);
-    console.log('BODY:', body);
-    if (!file) {
-      throw new Error('Archivo no enviado');
-    }
+async upload(
+  file: Express.Multer.File,
+  userPayload: any,
+  body: CreateDocumentacionDto,
+) {
+  if (!file) throw new BadRequestException('Archivo no enviado');
 
-    const user = await this.userRepository.findOne({
-      where: { email: userPayload.email },
-      relations: ['empresa'],
-    });
+  const user = await this.userRepository.findOne({
+    where: { email: userPayload.email },
+    relations: ['empresa'],
+  });
 
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
+  if (!user) throw new NotFoundException('Usuario no encontrado');
 
-    const filePath = `estudiantes/${user.email}/${Date.now()}-${file.originalname}`;
-
-    const allowedMimeTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException(
-        `mime type ${file.mimetype} is not supported`,
-      );
-    }
-
-    const { error } = await this.supabase.storage
-      .from(process.env.SUPABASE_BUCKET)
-      .upload(filePath, file.buffer, {
-        contentType: file.mimetype,
-      });
-    if (error) {
-      throw new Error(error.message);
-    }
-    const { data } = this.supabase.storage
-      .from('documentacion')
-      .getPublicUrl(filePath);
-
-    const documentacion = this.documentacionRepository.create({
-      name: file.originalname,
-      type: file.mimetype,
-      size: file.size,
+  const existingDocument = await this.documentacionRepository.findOne({
+    where: {
+      user: { id: user.id },
       typeDocument: body.typeDocument,
-      documentUrl: data.publicUrl,
-      userEmail: user.email,
-      user,
-      empresa: user.empresa,
-    });
-    return this.documentacionRepository.save(documentacion);
+    },
+  });
+
+  // 👇 SI YA EXISTE → UPDATE
+  if (existingDocument) {
+    return this.update(
+      existingDocument.id_documentacion,
+      body,
+      userPayload,
+      file,
+    );
   }
+
+  // 👇 SI NO EXISTE → CREATE
+  const filePath = `estudiantes/${user.email}/${Date.now()}-${file.originalname}`;
+
+  const { error } = await this.supabase.storage
+    .from(process.env.SUPABASE_BUCKET)
+    .upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+    });
+
+  if (error) throw new Error(error.message);
+
+  const { data } = this.supabase.storage
+    .from(process.env.SUPABASE_BUCKET)
+    .getPublicUrl(filePath);
+
+  const documentacion = this.documentacionRepository.create({
+    name: file.originalname,
+    type: file.mimetype,
+    size: file.size,
+    typeDocument: body.typeDocument,
+    documentUrl: data.publicUrl,
+    userEmail: user.email,
+    user,
+    empresa: user.empresa,
+    status: EstadoDocumento.PENDIENTE,
+  });
+
+  return this.documentacionRepository.save(documentacion);
+}
 
   async uploadForUser(
     file: Express.Multer.File,
@@ -141,6 +146,17 @@ export class DocumentacionService {
         `mime type ${file.mimetype} is not supported`,
       );
     }
+    //eliminar el archivo anterior de supabase
+    const oldFilePath = documentacion.documentUrl?.split(
+      '/object/public/documentacion/',
+    )[1];
+
+    if (oldFilePath) {
+      await this.supabase.storage
+        .from(process.env.SUPABASE_BUCKET)
+        .remove(oldFilePath);
+    }
+
 
     const filePath = `estudiantes/${userPayload.email}/${Date.now()}-${file.originalname}`;
 
