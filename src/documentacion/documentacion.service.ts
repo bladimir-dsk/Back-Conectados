@@ -141,6 +141,16 @@ export class DocumentacionService {
         `mime type ${file.mimetype} is not supported`,
       );
     }
+    //eliminar el archivo anterior de supabase
+    const oldFilePath = documentacion.documentUrl?.split(
+      '/object/public/documentacion/',
+    )[1];
+
+    if (oldFilePath) {
+      await this.supabase.storage
+        .from(process.env.SUPABASE_BUCKET)
+        .remove(oldFilePath);
+    }
 
     const filePath = `estudiantes/${userPayload.email}/${Date.now()}-${file.originalname}`;
 
