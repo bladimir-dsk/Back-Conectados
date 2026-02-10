@@ -12,6 +12,8 @@ import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/common/enums/rol.enum';
 import { EstadoDocumento } from 'src/common/enums/estadoDocumento.enum';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
+import { TypeDocuments } from 'src/common/enums/typeDocuments.enum';
 
 @Injectable()
 export class DocumentacionService {
@@ -23,66 +25,66 @@ export class DocumentacionService {
     @Inject('SUPABASE') private readonly supabase,
   ) {}
 
-async upload(
-  file: Express.Multer.File,
-  userPayload: any,
-  body: CreateDocumentacionDto,
-) {
-  if (!file) throw new BadRequestException('Archivo no enviado');
+  async upload(
+    file: Express.Multer.File,
+    userPayload: any,
+    body: CreateDocumentacionDto,
+  ) {
+    if (!file) throw new BadRequestException('Archivo no enviado');
 
-  const user = await this.userRepository.findOne({
-    where: { email: userPayload.email },
-    relations: ['empresa'],
-  });
-
-  if (!user) throw new NotFoundException('Usuario no encontrado');
-
-  const existingDocument = await this.documentacionRepository.findOne({
-    where: {
-      user: { id: user.id },
-      typeDocument: body.typeDocument,
-    },
-  });
-
-  // 👇 SI YA EXISTE → UPDATE
-  if (existingDocument) {
-    return this.update(
-      existingDocument.id_documentacion,
-      body,
-      userPayload,
-      file,
-    );
-  }
-
-  // 👇 SI NO EXISTE → CREATE
-  const filePath = `estudiantes/${user.email}/${Date.now()}-${file.originalname}`;
-
-  const { error } = await this.supabase.storage
-    .from(process.env.SUPABASE_BUCKET)
-    .upload(filePath, file.buffer, {
-      contentType: file.mimetype,
+    const user = await this.userRepository.findOne({
+      where: { email: userPayload.email },
+      relations: ['empresa'],
     });
 
-  if (error) throw new Error(error.message);
+    if (!user) throw new NotFoundException('Usuario no encontrado');
 
-  const { data } = this.supabase.storage
-    .from(process.env.SUPABASE_BUCKET)
-    .getPublicUrl(filePath);
+    const existingDocument = await this.documentacionRepository.findOne({
+      where: {
+        user: { id: user.id },
+        typeDocument: body.typeDocument,
+      },
+    });
 
-  const documentacion = this.documentacionRepository.create({
-    name: file.originalname,
-    type: file.mimetype,
-    size: file.size,
-    typeDocument: body.typeDocument,
-    documentUrl: data.publicUrl,
-    userEmail: user.email,
-    user,
-    empresa: user.empresa,
-    status: EstadoDocumento.PENDIENTE,
-  });
+    // 👇 SI YA EXISTE → UPDATE
+    if (existingDocument) {
+      return this.update(
+        existingDocument.id_documentacion,
+        body,
+        userPayload,
+        file,
+      );
+    }
 
-  return this.documentacionRepository.save(documentacion);
-}
+    // 👇 SI NO EXISTE → CREATE
+    const filePath = `estudiantes/${user.email}/${Date.now()}-${file.originalname}`;
+
+    const { error } = await this.supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+      });
+
+    if (error) throw new Error(error.message);
+
+    const { data } = this.supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .getPublicUrl(filePath);
+
+    const documentacion = this.documentacionRepository.create({
+      name: file.originalname,
+      type: file.mimetype,
+      size: file.size,
+      typeDocument: body.typeDocument,
+      documentUrl: data.publicUrl,
+      userEmail: user.email,
+      user,
+      empresa: user.empresa,
+      status: EstadoDocumento.PENDIENTE,
+    });
+
+    return this.documentacionRepository.save(documentacion);
+  }
 
   async uploadForUser(
     file: Express.Multer.File,
@@ -156,7 +158,6 @@ async upload(
         .from(process.env.SUPABASE_BUCKET)
         .remove(oldFilePath);
     }
-
 
     const filePath = `estudiantes/${userPayload.email}/${Date.now()}-${file.originalname}`;
 
@@ -256,5 +257,70 @@ async upload(
     documentacion.status = updateDocumentacionDto.status;
     Object.assign(documentacion, updateDocumentacionDto);
     return this.documentacionRepository.save(documentacion);
+  }
+
+  /// metodo para ver si los tipos de documentos de mi usuario estan aprobados
+  async documentAprovate(user: UserActiveInterface) {
+    const requiredDocuments = [
+      TypeDocuments.INE_DELANTERA,
+      TypeDocuments.INE_TRASERA,
+      TypeDocuments.PASAPORTE,
+      TypeDocuments.CFE,
+    ];
+
+    const documents = await this.documentacionRepository.find({
+      where: {
+        userEmail: user.email,
+      },
+    });
+
+    // Mapa rápido para validar por tipo
+    const documentsMap = new Map(
+      documents.map((doc) => [doc.typeDocument, doc.status]),
+    );
+
+    const missingDocuments = [];
+    const rejectedDocuments = [];
+    const pendingDocuments = [];
+
+    for (const type of requiredDocuments) {
+      if (!documentsMap.has(type)) {
+        missingDocuments.push(type);
+        continue;
+      }
+
+      const status = documentsMap.get(type);
+
+      if (status === EstadoDocumento.RECHAZADO) {
+        rejectedDocuments.push(type);
+      }
+
+      if (status === EstadoDocumento.PENDIENTE) {
+        pendingDocuments.push(type);
+      }
+    }
+
+    //No cumple
+    if (
+      missingDocuments.length ||
+      rejectedDocuments.length ||
+      pendingDocuments.length
+    ) {
+      return {
+        approved: false,
+        message: 'Documentación incompleta o no aprobada',
+        detail: {
+          missingDocuments,
+          rejectedDocuments,
+          pendingDocuments,
+        },
+      };
+    }
+
+    // Todo aprobado
+    return {
+      approved: true,
+      message: 'Todos los documentos han sido aprobados',
+    };
   }
 }

@@ -17,6 +17,8 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Role } from 'src/common/enums/rol.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ActiveUser } from 'src/common/decorators/active-user.decorator';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 
 @ApiBearerAuth('jwt')
 @ApiTags('Documentacion')
@@ -56,6 +58,12 @@ export class DocumentacionController {
   @Auth([Role.ESTUDIANTE, Role.ADMIN])
   findAll(@Req() req: any) {
     return this.documentacionService.findAll(req.user);
+  }
+
+  @Get('status/approved')
+  @Auth(Role.ESTUDIANTE)
+  documentStatus(@ActiveUser() user: UserActiveInterface) {
+    return this.documentacionService.documentAprovate(user);
   }
 
   @Get(':id')
