@@ -11,6 +11,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
+import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
 
 export class CreateAlojamientoDto {
   @ApiProperty()
@@ -32,8 +33,8 @@ export class CreateAlojamientoDto {
   gender: string;
 
   @ApiProperty()
-  @IsString()
-  typeIncome: string;
+  @IsEnum(TipoRenta)
+  typeIncome: TipoRenta;
 
   @ApiProperty()
   @IsString()
@@ -69,8 +70,12 @@ export class CreateAlojamientoDto {
   estatus: EstadoAlojamiento;
 
   @ApiProperty()
-  @IsInt()
-  id_PlanVigencia: number;
+  @IsNumber()
+  precio_completo: number;
+
+  // @ApiProperty()
+  // @IsInt()
+  // id_PlanVigencia: number;
 
   @ApiProperty()
   @IsInt()

@@ -2,6 +2,7 @@ import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import { Cama } from 'src/camas/entities/cama.entity';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
+import { Renta } from 'src/renta/entities/renta.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Column,
@@ -36,12 +37,24 @@ export class Cuarto {
   })
   estatus: EstadoAlojamiento;
 
+  // @ManyToOne(() => Alojamiento, (alojamiento) => alojamiento.cuartos)
+  // @JoinColumn({ name: 'id_alojamiento' })
+  // alojamiento: Alojamiento;
   @ManyToOne(() => Alojamiento, (alojamiento) => alojamiento.cuartos)
   @JoinColumn({ name: 'id_alojamiento' })
   alojamiento: Alojamiento;
 
+  @Column()
+  id_alojamiento: number;
+
   @OneToMany(() => Cama, (cama) => cama.cuarto)
   camas: Cama[];
+
+  @OneToMany(() => Renta, (renta) => renta.cuarto)
+  rentas: Renta[];
+
+  // @OneToMany(() => Cama, (cama) => cama.cuarto)
+  // camas: Cama[];
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })

@@ -39,17 +39,17 @@ export class AlojamientoService {
       throw new NotAcceptableException('Empresa no encontrada');
     }
 
-    const planVigencia = await this.planVigenciaRepository.findOne({
-      where: {
-        id_PlanVigencia: createAlojamientoDto.id_PlanVigencia,
-        empresa: {
-          id_empresa: user.id_empresa,
-        },
-      },
-    });
-    if (!planVigencia) {
-      throw new NotAcceptableException('Plan vigencia no encontrado');
-    }
+    // const planVigencia = await this.planVigenciaRepository.findOne({
+    //   where: {
+    //     id_PlanVigencia: createAlojamientoDto.id_PlanVigencia,
+    //     empresa: {
+    //       id_empresa: user.id_empresa,
+    //     },
+    //   },
+    // });
+    // if (!planVigencia) {
+    //   throw new NotAcceptableException('Plan vigencia no encontrado');
+    // }
 
     const propietario = await this.propietarioRepository.findOne({
       where: {
@@ -78,7 +78,7 @@ export class AlojamientoService {
     const alojamiento = this.alojamientoRepository.create({
       ...createAlojamientoDto,
       empresa,
-      planVigencia,
+      // planVigencia,
       propietario,
       userEmail: user.email,
     });
@@ -118,7 +118,7 @@ export class AlojamientoService {
 
     const [data, total] = await this.alojamientoRepository.findAndCount({
       where,
-      relations: ['servicios', 'planVigencia', 'propietario'],
+      relations: ['servicios', 'propietario'],
       take: limit,
       skip: (page - 1) * limit,
     });
@@ -153,7 +153,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'planVigencia', 'propietario'],
+      relations: ['servicios', 'propietario'],
     });
 
     if (!alojamiento) {
@@ -183,27 +183,27 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'planVigencia', 'propietario'],
+      relations: ['servicios', 'propietario'],
     });
 
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
 
-    if (updateAlojamientoDto.id_PlanVigencia) {
-      const planVigencia = await this.planVigenciaRepository.findOne({
-        where: {
-          id_PlanVigencia: updateAlojamientoDto.id_PlanVigencia,
-          empresa: {
-            id_empresa: user.id_empresa,
-          },
-        },
-      });
-      if (!planVigencia) {
-        throw new NotAcceptableException('Plan vigencia no encontrado');
-      }
-      alojamiento.planVigencia = planVigencia;
-    }
+    // if (updateAlojamientoDto.id_PlanVigencia) {
+    //   const planVigencia = await this.planVigenciaRepository.findOne({
+    //     where: {
+    //       id_PlanVigencia: updateAlojamientoDto.id_PlanVigencia,
+    //       empresa: {
+    //         id_empresa: user.id_empresa,
+    //       },
+    //     },
+    //   });
+    //   if (!planVigencia) {
+    //     throw new NotAcceptableException('Plan vigencia no encontrado');
+    //   }
+    //   alojamiento.planVigencia = planVigencia;
+    // }
 
     if (updateAlojamientoDto.id_Propietario) {
       if (user.role !== Role.ADMIN) {
@@ -291,7 +291,6 @@ export class AlojamientoService {
       where: whereConditions,
       relations: [
         'propietario',
-        'planVigencia',
         'servicios',
         'cuartos', // ✅ Relación con cuartos
         'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
@@ -331,13 +330,7 @@ export class AlojamientoService {
 
     const [data, total] = await this.alojamientoRepository.findAndCount({
       where: whereConditions,
-      relations: [
-        'propietario',
-        'planVigencia',
-        'servicios',
-        'cuartos',
-        'cuartos.camas',
-      ],
+      relations: ['propietario', 'servicios', 'cuartos', 'cuartos.camas'],
       take: limit,
       skip: (page - 1) * limit,
       order: {

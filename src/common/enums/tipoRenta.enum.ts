@@ -1,0 +1,6 @@
+export enum TipoRenta {
+  ALOJAMIENTO_COMPLETO = 'ALOJAMIENTO_COMPLETO',
+  CUARTO = 'CUARTO',
+  CAMA = 'CAMA',
+  ESPACIO = 'ESPACIO',
+}
