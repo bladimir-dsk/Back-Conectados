@@ -89,46 +89,87 @@ export class AlojamientoService {
     query: {
       page?: number;
       limit?: number;
-      // type?: string;
-      // gender?: string;
+      name?: string;
+      priceMin?: number;
+      priceMax?: number;
+      typeProperty?: string;
+      gender?: string;
+      typeIncome?: string;
+      city?: string;
     },
     user: UserActiveInterface,
   ) {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
 
-    const where: any = {
-      empresa: {
-        id_empresa: user.id_empresa,
-      },
-    };
+    const qb = this.alojamientoRepository
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.servicios', 'servicios')
+      .leftJoinAndSelect('a.propietario', 'propietario')
+      .where('a.empresa.id_empresa = :empresaId', {
+        empresaId: user.id_empresa,
+      });
 
     if (user.role === Role.PROPIETARIO) {
-      where.propietario = {
+      qb.andWhere('propietario.email = :email', {
         email: user.email,
-      };
+      });
     }
 
-    // if (query.type) {
-    //   where.typeProperty = query.type; // ✅ Cambiado de 'type' a 'typeProperty'
-    // }
-    // if (query.gender) {
-    //   where.gender = query.gender;
-    // }
+    if (query.name) {
+      qb.andWhere('LOWER(a.name) LIKE LOWER(:name)', {
+        name: `%${query.name}%`,
+      });
+    }
+    if (query.priceMin !== undefined) {
+      qb.andWhere('a.precio_completo >= :priceMin', {
+        priceMin: query.priceMin,
+      });
+    }
 
-    const [data, total] = await this.alojamientoRepository.findAndCount({
-      where,
-      relations: ['servicios', 'propietario'],
-      take: limit,
-      skip: (page - 1) * limit,
-    });
+    if (query.priceMax !== undefined) {
+      qb.andWhere('a.precio_completo <= :priceMax', {
+        priceMax: query.priceMax,
+      });
+    }
+
+    if (query.typeProperty) {
+      qb.andWhere('a.typeProperty = :typeProperty', {
+        typeProperty: query.typeProperty,
+      });
+    }
+
+    if (query.gender) {
+      qb.andWhere('a.gender = :gender', {
+        gender: query.gender,
+      });
+    }
+
+    if (query.typeIncome) {
+      qb.andWhere('a.typeIncome = :typeIncome', {
+        typeIncome: query.typeIncome,
+      });
+    }
+
+    if (query.city) {
+      qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
+        city: `%${query.city}%`,
+      });
+    }
+
+    qb.take(limit).skip((page - 1) * limit);
+
+    qb.orderBy('a.id_alojamiento', 'DESC');
+
+    const [data, total] = await qb.getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
+
     return {
       data,
       meta: {
         totalItems: total,
-        ItemsPerPage: limit,
+        itemsPerPage: limit,
         totalPages,
         currentPage: page,
         hasNextPage: page < totalPages,
