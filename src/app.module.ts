@@ -20,6 +20,8 @@ import { TerminosCondicionesModule } from './terminos-condiciones/terminos-condi
 import { PoliticaModule } from './politica/politica.module';
 import { CuartosModule } from './cuartos/cuartos.module';
 import { CamasModule } from './camas/camas.module';
+import { RentaModule } from './renta/renta.module';
+import { PagoModule } from './pago/pago.module';
 
 dotenv.config();
 
@@ -65,6 +67,8 @@ dotenv.config();
     PoliticaModule,
     CuartosModule,
     CamasModule,
+    RentaModule,
+    PagoModule,
   ],
   controllers: [],
   providers: [],

@@ -1,0 +1,6 @@
+export enum EstadoRenta {
+  PENDIENTE = 'PENDIENTE',
+  ACTIVA = 'ACTIVA',
+  FINALIZADA = 'FINALIZADA',
+  CANCELADA = 'CANCELADA',
+}

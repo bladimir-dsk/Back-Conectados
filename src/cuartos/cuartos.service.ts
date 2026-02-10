@@ -8,6 +8,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Role } from 'src/common/enums/rol.enum';
+import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
 
 @Injectable()
 export class CuartosService {
@@ -25,6 +26,7 @@ export class CuartosService {
         id_empresa: user.id_empresa,
       },
     });
+
     if (!empresa) {
       throw new BadRequestException('Empresa no encontrada');
     }
@@ -37,10 +39,25 @@ export class CuartosService {
         },
       },
     });
+
     if (!alojamiento) {
       throw new BadRequestException('Alojamiento no encontrado');
     }
 
+    // 🚫 VALIDACIÓN CLAVE
+    if (alojamiento.typeIncome === TipoRenta.ALOJAMIENTO_COMPLETO) {
+      throw new BadRequestException(
+        'No se pueden crear cuartos cuando el alojamiento es de renta completa',
+      );
+    }
+
+    if (alojamiento.typeIncome !== TipoRenta.ESPACIO) {
+      throw new BadRequestException(
+        'Solo se pueden crear cuartos cuando el alojamiento es por espacio',
+      );
+    }
+
+    // ✅ SOLO SI ES ESPACIO (u otros permitidos) SE CREA
     const cuarto = this.cuartoRepository.create({
       ...createCuartoDto,
       empresa,

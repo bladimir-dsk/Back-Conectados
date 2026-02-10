@@ -17,6 +17,8 @@ import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamie
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
+import { Renta } from 'src/renta/entities/renta.entity';
+import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
 
 @Entity('alojamientos')
 export class Alojamiento {
@@ -25,6 +27,9 @@ export class Alojamiento {
 
   @Column({ length: 150 })
   name: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  precio_completo: number; // 2000 por mes
 
   @Column()
   url: string;
@@ -53,8 +58,14 @@ export class Alojamiento {
   @Column()
   longitude: string;
 
-  @Column()
-  typeIncome: string;
+  @Column({ type: 'enum', enum: TipoRenta })
+  typeIncome: TipoRenta;
+
+  @OneToMany(() => Cuarto, (cuarto) => cuarto.alojamiento)
+  cuartos: Cuarto[];
+
+  @OneToMany(() => Renta, (renta) => renta.alojamiento)
+  rentas: Renta[];
 
   @Column({
     type: 'enum',
@@ -66,9 +77,6 @@ export class Alojamiento {
   @Column({ nullable: true })
   description: string;
 
-  @OneToMany(() => Cuarto, (cuarto) => cuarto.alojamiento)
-  cuartos: Cuarto[];
-
   @ManyToOne(() => Propietario, (propietario) => propietario.alojamientos)
   @JoinColumn({ name: 'id_propietario' })
   propietario: Propietario;
@@ -76,9 +84,9 @@ export class Alojamiento {
   @OneToMany(() => AlojamientoServicio, (as) => as.alojamiento)
   servicios: AlojamientoServicio[];
 
-  @ManyToOne(() => PlanVigencia, (planVigencia) => planVigencia.id_PlanVigencia)
-  @JoinColumn({ name: 'id_PlanVigencia' })
-  planVigencia: PlanVigencia;
+  // @ManyToOne(() => PlanVigencia, (planVigencia) => planVigencia.id_PlanVigencia)
+  // @JoinColumn({ name: 'id_PlanVigencia' })
+  // planVigencia: PlanVigencia;
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })

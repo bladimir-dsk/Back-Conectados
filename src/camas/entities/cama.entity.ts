@@ -1,12 +1,14 @@
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
+import { Renta } from 'src/renta/entities/renta.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Column,
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -37,6 +39,12 @@ export class Cama {
   @ManyToOne(() => Cuarto, (cuarto) => cuarto.camas)
   @JoinColumn({ name: 'id_cuarto' })
   cuarto: Cuarto;
+
+  @Column()
+  id_cuarto: number;
+
+  @OneToMany(() => Renta, (renta) => renta.cama)
+  rentas: Renta[];
 
   @ManyToOne(() => Empresa, (empresa) => empresa.users)
   @JoinColumn({ name: 'id_empresa' })

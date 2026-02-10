@@ -44,6 +44,6 @@ export class PlanVigencia {
   @Column({ nullable: true })
   userEmail: string;
 
-  @OneToMany(() => Alojamiento, (alojamiento) => alojamiento.planVigencia)
-  alojamientos: Alojamiento[];
+  // @OneToMany(() => Alojamiento, (alojamiento) => alojamiento.planVigencia)
+  // alojamientos: Alojamiento[];
 }
