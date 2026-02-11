@@ -10,7 +10,7 @@ import {
 import { AlojamientoService } from './alojamiento.service';
 import { CreateAlojamientoDto } from './dto/create-alojamiento.dto';
 import { UpdateAlojamientoDto } from './dto/update-alojamiento.dto';
-import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Role } from 'src/common/enums/rol.enum';
 import { ActiveUser } from 'src/common/decorators/active-user.decorator';
@@ -69,6 +69,49 @@ export class AlojamientoController {
         city,
       },
       user,
+    );
+  }
+
+  @Get('alojamientos/propietario/:id_propietario')
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'name', required: false, type: String })
+  @ApiQuery({ name: 'priceMin', required: false, type: Number })
+  @ApiQuery({ name: 'priceMax', required: false, type: Number })
+  @ApiQuery({ name: 'typeProperty', required: false, type: String })
+  @ApiQuery({ name: 'gender', required: false, type: String })
+  @ApiQuery({ name: 'typeIncome', required: false, type: String })
+  @ApiQuery({ name: 'city', required: false, type: String })
+  @ApiParam({ name: 'id_propietario', required: true, type: Number })
+  findAllPropietario(
+    @ActiveUser() user: UserActiveInterface,
+    @Param('id_propietario') id_propietario: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('name') name?: string,
+    @Query('priceMin') priceMin?: string,
+    @Query('priceMax') priceMax?: string,
+    @Query('typeProperty') typeProperty?: string,
+    @Query('gender') gender?: string,
+    @Query('typeIncome') typeIncome?: string,
+    @Query('city') city?: string,
+  ) {
+    return this.alojamientoService.findAllPropietario(
+      {
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 10,
+
+        name,
+        priceMin: priceMin ? Number(priceMin) : undefined,
+        priceMax: priceMax ? Number(priceMax) : undefined,
+        typeProperty,
+        gender,
+        typeIncome,
+        city,
+      },
+      user,
+      id_propietario,
     );
   }
 
