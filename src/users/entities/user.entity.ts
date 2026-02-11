@@ -13,6 +13,10 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { School } from 'src/school/entities/school.entity';
+import { Documentacion } from 'src/documentacion/entities/documentacion.entity';
+import { Alcance } from 'src/alcance/entities/alcance.entity';
+import { TerminosCondicione } from 'src/terminos-condiciones/entities/terminos-condicione.entity';
+import { Politica } from 'src/politica/entities/politica.entity';
 
 @Entity()
 export class User {
@@ -64,4 +68,19 @@ export class User {
   @ManyToOne(() => School, { nullable: true })
   @JoinColumn({ name: 'id_school' })
   School?: School;
+
+  @OneToMany(() => Documentacion, (doc) => doc.user)
+  documentaciones: Documentacion[];
+
+  @OneToOne(() => Alcance, (alcance) => alcance.user)
+  alcance: Alcance;
+
+  @OneToMany(
+    () => TerminosCondicione,
+    (terminoscondiciones) => terminoscondiciones.user,
+  )
+  terminoscondiciones: TerminosCondicione[];
+
+  @OneToMany(() => Politica, (politica) => politica.user)
+  politica: Politica[];
 }

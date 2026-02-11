@@ -104,17 +104,39 @@ export class PropietariosService {
   }
 
   async findAll(user: UserActiveInterface, paginacion: PaginacionDto) {
-    const { paginaActual, limite } = paginacion;
+    const { paginaActual, limite, namePersonal, estatus, emailPersonal } =
+      paginacion;
 
-    if (!paginaActual || !limite) {
-      const data = await this.propietarioRepository.find({
-        where: {
-          empresa: { id_empresa: user.id_empresa },
-        },
-        relations: ['empresa', 'user'],
-        order: { id_propietario: 'DESC' },
+    const qb = this.propietarioRepository
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.empresa', 'e')
+      .leftJoinAndSelect('p.user', 'u')
+      .where('e.id_empresa = :empresaId', {
+        empresaId: user.id_empresa,
       });
 
+    if (namePersonal) {
+      qb.andWhere('p.namePersonal ILIKE :namePersonal', {
+        namePersonal: `%${namePersonal}%`,
+      });
+    }
+
+    if (estatus) {
+      qb.andWhere('p.estatus = :estatus', {
+        estatus,
+      });
+    }
+
+    if (emailPersonal) {
+      qb.andWhere('p.emailPersonal ILIKE :emailPersonal', {
+        emailPersonal: `%${emailPersonal}%`,
+      });
+    }
+
+    qb.orderBy('p.id_propietario', 'DESC');
+
+    if (!paginaActual || !limite) {
+      const data = await qb.getMany();
       const total = data.length;
 
       return {
@@ -130,32 +152,23 @@ export class PropietariosService {
       };
     }
 
-    const page = paginaActual;
-    const take = limite;
-    const skip = (page - 1) * take;
+    const skip = (paginaActual - 1) * limite;
 
-    const [data, totalRegistros] =
-      await this.propietarioRepository.findAndCount({
-        where: {
-          empresa: { id_empresa: user.id_empresa },
-        },
-        relations: ['empresa', 'user'],
-        take,
-        skip,
-        order: { id_propietario: 'DESC' },
-      });
+    qb.skip(skip).take(limite);
 
-    const totalPaginas = Math.ceil(totalRegistros / take);
+    const [data, totalRegistros] = await qb.getManyAndCount();
+
+    const totalPaginas = Math.ceil(totalRegistros / limite);
 
     return {
       data,
       paginacion: {
-        paginaActual: page,
-        limite: take,
+        paginaActual,
+        limite,
         totalRegistros,
         totalPaginas,
-        tienePaginaAnterior: page > 1,
-        tienePaginaSiguiente: page < totalPaginas,
+        tienePaginaAnterior: paginaActual > 1,
+        tienePaginaSiguiente: paginaActual < totalPaginas,
       },
     };
   }
