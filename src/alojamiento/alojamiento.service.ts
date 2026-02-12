@@ -10,6 +10,7 @@ import { PlanVigencia } from 'src/plan-vigencia/entities/plan-vigencia.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Role } from 'src/common/enums/rol.enum';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
+import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 
 @Injectable()
 export class AlojamientoService {
@@ -24,6 +25,8 @@ export class AlojamientoService {
     private readonly planVigenciaRepository: Repository<PlanVigencia>,
     @InjectRepository(Propietario)
     private readonly propietarioRepository: Repository<Propietario>,
+    @InjectRepository(AlojamientoServicio)
+    private readonly alojamientoServicioRepository: Repository<AlojamientoServicio>,
   ) {}
 
   async create(
@@ -194,7 +197,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'propietario'],
+      relations: ['servicios', 'servicios.servicio', 'propietario'],
     });
 
     if (!alojamiento) {
@@ -333,6 +336,7 @@ export class AlojamientoService {
       relations: [
         'propietario',
         'servicios',
+        'servicios.servicio',
         'cuartos', // ✅ Relación con cuartos
         'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
       ],
@@ -371,7 +375,13 @@ export class AlojamientoService {
 
     const [data, total] = await this.alojamientoRepository.findAndCount({
       where: whereConditions,
-      relations: ['propietario', 'servicios', 'cuartos', 'cuartos.camas'],
+      relations: [
+        'propietario',
+        'servicios',
+        'servicios.servicio',
+        'cuartos',
+        'cuartos.camas',
+      ],
       take: limit,
       skip: (page - 1) * limit,
       order: {
