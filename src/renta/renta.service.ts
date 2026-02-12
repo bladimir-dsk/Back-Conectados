@@ -123,16 +123,11 @@ export class RentaService {
     }
   }
 
-  /**
-   * Limpia los datos de renta según el tipo
-   * Elimina IDs que no corresponden al tipo de renta seleccionado
-   */
   private limpiarDatosRenta(dto: CreateRentaDto): CreateRentaDto {
     const datosLimpios = { ...dto };
 
     switch (dto.tipo_renta) {
       case TipoRenta.ALOJAMIENTO_COMPLETO:
-        // Solo debe tener id_alojamiento
         if (!datosLimpios.id_alojamiento) {
           throw new BadRequestException(
             'Debe proporcionar id_alojamiento para renta completa',
@@ -143,7 +138,6 @@ export class RentaService {
         break;
 
       case TipoRenta.CUARTO:
-        // Solo debe tener id_cuarto
         if (!datosLimpios.id_cuarto) {
           throw new BadRequestException(
             'Debe proporcionar id_cuarto para renta de cuarto',
@@ -154,7 +148,6 @@ export class RentaService {
         break;
 
       case TipoRenta.CAMA:
-        // Solo debe tener id_cama
         if (!datosLimpios.id_cama) {
           throw new BadRequestException(
             'Debe proporcionar id_cama para renta de cama',
@@ -182,7 +175,6 @@ export class RentaService {
     await queryRunner.startTransaction();
 
     try {
-      // Obtener renta con relaciones
       const renta = await this.rentaRepository.findOne({
         where: {
           id_renta: idRenta,
@@ -195,7 +187,6 @@ export class RentaService {
         throw new NotFoundException('Renta no encontrada');
       }
 
-      // Actualizar estado del pago
       const pago = await this.pagoRepository.findOne({
         where: { id_renta: idRenta, estado: EstadoPago.PENDIENTE },
       });
@@ -210,12 +201,10 @@ export class RentaService {
 
       await queryRunner.manager.save(pago);
 
-      // Actualizar estado de la renta
       renta.estado = EstadoRenta.ACTIVA;
       await queryRunner.manager.save(renta);
 
-      // Actualizar estado del recurso rentado
-      await this.actualizarEstadoRecurso(
+      await this.actualizarEstadoRecursoCascada(
         queryRunner,
         renta.tipo_renta,
         renta.id_alojamiento,
@@ -289,7 +278,6 @@ export class RentaService {
       return { disponible: false, mensaje: 'Alojamiento no encontrado' };
     }
 
-    // ✅ Validar que tenga precio configurado
     if (!alojamiento.precio_completo || alojamiento.precio_completo <= 0) {
       return {
         disponible: false,
@@ -301,7 +289,6 @@ export class RentaService {
       return { disponible: false, mensaje: 'Alojamiento no disponible' };
     }
 
-    // Verificar que no haya rentas activas que se solapen
     const rentasActivas = await this.rentaRepository
       .createQueryBuilder('renta')
       .where('renta.id_alojamiento = :idAlojamiento', { idAlojamiento })
@@ -321,7 +308,7 @@ export class RentaService {
 
     return {
       disponible: true,
-      precioMensual: Number(alojamiento.precio_completo), // ✅ Convertir a número
+      precioMensual: Number(alojamiento.precio_completo),
     };
   }
 
@@ -342,7 +329,6 @@ export class RentaService {
       return { disponible: false, mensaje: 'Cuarto no encontrado' };
     }
 
-    // ✅ Validar que tenga precio configurado
     if (!cuarto.price || cuarto.price <= 0) {
       return {
         disponible: false,
@@ -370,7 +356,7 @@ export class RentaService {
 
     return {
       disponible: true,
-      precioMensual: Number(cuarto.price), // ✅ Convertir a número
+      precioMensual: Number(cuarto.price),
     };
   }
 
@@ -391,7 +377,6 @@ export class RentaService {
       return { disponible: false, mensaje: 'Cama no encontrada' };
     }
 
-    // ✅ Validar que tenga precio configurado
     if (!cama.price || cama.price <= 0) {
       return {
         disponible: false,
@@ -419,19 +404,18 @@ export class RentaService {
 
     return {
       disponible: true,
-      precioMensual: Number(cama.price), // ✅ Convertir a número
+      precioMensual: Number(cama.price),
     };
   }
 
   private calcularFechaSalida(fechaEntrada: Date, meses: number): Date {
     const fechaSalida = new Date(fechaEntrada);
     fechaSalida.setMonth(fechaSalida.getMonth() + meses);
-    // Restar 1 día para que si entra el día 1, salga el día 30/31
     fechaSalida.setDate(fechaSalida.getDate() - 1);
     return fechaSalida;
   }
 
-  private async actualizarEstadoRecurso(
+  private async actualizarEstadoRecursoCascada(
     queryRunner: any,
     tipoRenta: TipoRenta,
     idAlojamiento?: number,
@@ -446,6 +430,30 @@ export class RentaService {
           { id_alojamiento: idAlojamiento },
           { estatus: nuevoEstado },
         );
+
+        await queryRunner.manager.update(
+          Cuarto,
+          { id_alojamiento: idAlojamiento },
+          { estatus: nuevoEstado },
+        );
+
+        await queryRunner.manager
+          .createQueryBuilder()
+          .update(Cama)
+          .set({ estatus: nuevoEstado })
+          .where((qb) => {
+            const subQuery = qb
+              .subQuery()
+              .select('cuarto.id_cuarto')
+              .from(Cuarto, 'cuarto')
+              .where('cuarto.id_alojamiento = :idAlojamiento', {
+                idAlojamiento,
+              })
+              .getQuery();
+            return 'id_cuarto IN ' + subQuery;
+          })
+          .execute();
+
         break;
 
       case TipoRenta.CUARTO:
@@ -454,6 +462,13 @@ export class RentaService {
           { id_cuarto: idCuarto },
           { estatus: nuevoEstado },
         );
+
+        await queryRunner.manager.update(
+          Cama,
+          { id_cuarto: idCuarto },
+          { estatus: nuevoEstado },
+        );
+
         break;
 
       case TipoRenta.CAMA:
@@ -462,6 +477,7 @@ export class RentaService {
           { id_cama: idCama },
           { estatus: nuevoEstado },
         );
+
         break;
     }
   }
@@ -486,12 +502,9 @@ export class RentaService {
 
     try {
       for (const renta of rentasExpiradas) {
-        // Actualizar estado de la renta
         renta.estado = EstadoRenta.FINALIZADA;
         await queryRunner.manager.save(renta);
-
-        // Liberar el recurso
-        await this.actualizarEstadoRecurso(
+        await this.actualizarEstadoRecursoCascada(
           queryRunner,
           renta.tipo_renta,
           renta.id_alojamiento,
@@ -504,6 +517,7 @@ export class RentaService {
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      console.error('Error al verificar rentas expiradas:', error);
       throw error;
     } finally {
       await queryRunner.release();

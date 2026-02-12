@@ -10,6 +10,7 @@ import { PlanVigencia } from 'src/plan-vigencia/entities/plan-vigencia.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Role } from 'src/common/enums/rol.enum';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
+import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 
 @Injectable()
 export class AlojamientoService {
@@ -24,6 +25,8 @@ export class AlojamientoService {
     private readonly planVigenciaRepository: Repository<PlanVigencia>,
     @InjectRepository(Propietario)
     private readonly propietarioRepository: Repository<Propietario>,
+    @InjectRepository(AlojamientoServicio)
+    private readonly alojamientoServicioRepository: Repository<AlojamientoServicio>,
   ) {}
 
   async create(
@@ -195,7 +198,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'propietario', 'fotos'],
+      relations: ['servicios', 'propietario', 'fotos', 'servicios.servicio'],
     });
 
     if (!alojamiento) {
@@ -225,7 +228,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'propietario'],
+      relations: ['servicios', 'propietario', 'servicios.servicio', 'fotos'],
     });
 
     if (!alojamiento) {
@@ -332,6 +335,7 @@ export class AlojamientoService {
       relations: [
         'propietario',
         'servicios',
+        'servicios.servicio',
         'cuartos', // ✅ Relación con cuartos
         'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
         'fotos', // ✅ Relación con fotos
@@ -374,6 +378,7 @@ export class AlojamientoService {
       relations: [
         'propietario',
         'servicios',
+        'servicios.servicio',
         'cuartos',
         'cuartos.camas',
         'fotos', // ✅ Relación con fotos
@@ -391,6 +396,116 @@ export class AlojamientoService {
       },
     });
 
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  ///traer sus alojamientos de un propietario
+  async findAllPropietario(
+    query: {
+      page?: number;
+      limit?: number;
+      name?: string;
+      priceMin?: number;
+      priceMax?: number;
+      typeProperty?: string;
+      gender?: string;
+      typeIncome?: string;
+      city?: string;
+    },
+    user: UserActiveInterface,
+    id_propietario: number,
+  ) {
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const limit = query.limit && query.limit > 0 ? query.limit : 10;
+
+    const propietario = await this.propietarioRepository.findOne({
+      where: {
+        id_propietario,
+        empresa: {
+          id_empresa: user.id_empresa,
+        },
+      },
+    });
+
+    if (!propietario) {
+      throw new NotAcceptableException('Propietario no encontrado');
+    }
+
+    const qb = this.alojamientoRepository
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.servicios', 'servicios')
+      .leftJoinAndSelect('a.propietario', 'propietario')
+      .where('a.empresa.id_empresa = :empresaId', {
+        empresaId: user.id_empresa,
+      })
+      .andWhere('propietario.id_propietario = :id', {
+        id: id_propietario,
+      });
+
+    if (user.role === Role.PROPIETARIO) {
+      qb.andWhere('propietario.email = :email', {
+        email: user.email,
+      });
+    }
+
+    if (query.name) {
+      qb.andWhere('LOWER(a.name) LIKE LOWER(:name)', {
+        name: `%${query.name}%`,
+      });
+    }
+
+    if (query.priceMin !== undefined) {
+      qb.andWhere('a.precio_completo >= :priceMin', {
+        priceMin: query.priceMin,
+      });
+    }
+
+    if (query.priceMax !== undefined) {
+      qb.andWhere('a.precio_completo <= :priceMax', {
+        priceMax: query.priceMax,
+      });
+    }
+
+    if (query.typeProperty) {
+      qb.andWhere('a.typeProperty = :typeProperty', {
+        typeProperty: query.typeProperty,
+      });
+    }
+
+    if (query.gender) {
+      qb.andWhere('a.gender = :gender', {
+        gender: query.gender,
+      });
+    }
+
+    if (query.typeIncome) {
+      qb.andWhere('a.typeIncome = :typeIncome', {
+        typeIncome: query.typeIncome,
+      });
+    }
+
+    if (query.city) {
+      qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
+        city: `%${query.city}%`,
+      });
+    }
+
+    qb.take(limit).skip((page - 1) * limit);
+    qb.orderBy('a.id_alojamiento', 'DESC');
+
+    const [data, total] = await qb.getManyAndCount();
     const totalPages = Math.ceil(total / limit);
 
     return {
