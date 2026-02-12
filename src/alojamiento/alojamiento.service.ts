@@ -109,6 +109,7 @@ export class AlojamientoService {
       .createQueryBuilder('a')
       .leftJoinAndSelect('a.servicios', 'servicios')
       .leftJoinAndSelect('a.propietario', 'propietario')
+      .leftJoinAndSelect('a.fotos', 'fotos') // visualizar los datos de la tabla foto
       .where('a.empresa.id_empresa = :empresaId', {
         empresaId: user.id_empresa,
       });
@@ -197,7 +198,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'servicios.servicio', 'propietario'],
+      relations: ['servicios', 'propietario', 'fotos', 'servicios.servicio'],
     });
 
     if (!alojamiento) {
@@ -227,7 +228,7 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'propietario'],
+      relations: ['servicios', 'propietario', 'servicios.servicio', 'fotos'],
     });
 
     if (!alojamiento) {
@@ -272,7 +273,6 @@ export class AlojamientoService {
 
     const {
       name,
-      url,
       typeProperty,
       gender,
       typeIncome,
@@ -288,7 +288,6 @@ export class AlojamientoService {
 
     Object.assign(alojamiento, {
       name,
-      url,
       typeProperty,
       gender,
       typeIncome,
@@ -339,6 +338,7 @@ export class AlojamientoService {
         'servicios.servicio',
         'cuartos', // ✅ Relación con cuartos
         'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
+        'fotos', // ✅ Relación con fotos
       ],
     });
 
@@ -381,6 +381,7 @@ export class AlojamientoService {
         'servicios.servicio',
         'cuartos',
         'cuartos.camas',
+        'fotos', // ✅ Relación con fotos
       ],
       take: limit,
       skip: (page - 1) * limit,
