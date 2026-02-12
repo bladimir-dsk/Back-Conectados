@@ -16,7 +16,8 @@ export class Foto {
 
   @Column()
   url: string;
-  @Column()
+
+  @Column({ nullable: true })
   descripcion: string;
 
   @Column({ type: 'boolean', default: false })

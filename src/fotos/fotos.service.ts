@@ -25,9 +25,9 @@ export class FotosService {
   async create(
     user: UserActiveInterface,
     id_alojamiento: number,
-    descripcion: string,
     esPrincipal: boolean,
     files: Express.Multer.File[],
+    descripcion?: string,
   ) {
     const alojamiento = await this.alojamientoRepository.findOne({
       where: {

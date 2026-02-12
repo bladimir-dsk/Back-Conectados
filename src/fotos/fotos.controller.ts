@@ -33,32 +33,32 @@ export class FotosController {
     @UploadedFiles() files: Express.Multer.File[],
     @ActiveUser() user: UserActiveInterface,
     @Body('id_alojamiento') id_alojamiento: number,
-    @Body('descripcion') descripcion: string,
     @Body('esPrincipal') esPrincipal: boolean,
+    @Body('descripcion') descripcion?: string,
   ) {
     return this.fotosService.create(
       user,
       Number(id_alojamiento),
-      descripcion,
       esPrincipal,
       files,
+      descripcion,
     );
   }
 
   @Get()
-  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
   findAll(@ActiveUser() user: UserActiveInterface) {
     return this.fotosService.findAll(user);
   }
 
   @Get(':id')
-  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
   findOne(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {
     return this.fotosService.findOne(+id, user);
   }
 
   @Patch(':id')
-  @Auth(Role.ADMIN)
+  @Auth([Role.ADMIN, Role.PROPIETARIO])
   @UseInterceptors(FileInterceptor('file'))
   update(
     @Param('id') id: number,
@@ -70,7 +70,7 @@ export class FotosController {
   }
 
   @Delete(':id')
-  @Auth(Role.ADMIN)
+  @Auth([Role.ADMIN, Role.PROPIETARIO])
   remove(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {
     return this.fotosService.remove(+id, user);
   }
