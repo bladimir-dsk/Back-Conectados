@@ -19,7 +19,7 @@ import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
 import { Renta } from 'src/renta/entities/renta.entity';
 import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
-
+import { Foto } from 'src/fotos/entities/foto.entity';
 @Entity('alojamientos')
 export class Alojamiento {
   @PrimaryGeneratedColumn()
@@ -30,9 +30,6 @@ export class Alojamiento {
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   precio_completo: number; // 2000 por mes
-
-  @Column()
-  url: string;
 
   @Column({ length: 150 })
   typeProperty: string;
@@ -98,6 +95,9 @@ export class Alojamiento {
   @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userEmail', referencedColumnName: 'email' })
   user: User;
+
+  @OneToMany(() => Foto, (foto) => foto.alojamiento)
+  fotos: Foto[];
 
   @CreateDateColumn()
   CreatedAt: Date;
