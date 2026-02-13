@@ -23,6 +23,7 @@ import { CamasModule } from './camas/camas.module';
 import { RentaModule } from './renta/renta.module';
 import { PagoModule } from './pago/pago.module';
 import { FotosModule } from './fotos/fotos.module';
+import { CalificacionModule } from './calificacion/calificacion.module';
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ dotenv.config();
     RentaModule,
     PagoModule,
     FotosModule,
+    CalificacionModule,
   ],
   controllers: [],
   providers: [],
