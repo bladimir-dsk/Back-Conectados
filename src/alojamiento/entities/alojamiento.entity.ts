@@ -20,6 +20,7 @@ import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
 import { Renta } from 'src/renta/entities/renta.entity';
 import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
 import { Foto } from 'src/fotos/entities/foto.entity';
+import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
 @Entity('alojamientos')
 export class Alojamiento {
   @PrimaryGeneratedColumn()
@@ -98,6 +99,9 @@ export class Alojamiento {
 
   @OneToMany(() => Foto, (foto) => foto.alojamiento)
   fotos: Foto[];
+
+  @OneToMany(() => Calificacion, (calificacion) => calificacion.alojamiento)
+  calificacion: Calificacion[];
 
   @CreateDateColumn()
   CreatedAt: Date;
