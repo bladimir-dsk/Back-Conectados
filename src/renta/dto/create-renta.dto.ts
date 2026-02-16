@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -62,4 +63,11 @@ export class CreateRentaDto {
   @Type(() => Number)
   @ApiProperty({ type: Number, required: false })
   precio_mensual?: number;
+
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  @Type(() => Number)
+  @ApiProperty({ type: [Number], required: false })
+  serviciosSeleccionados?: number[];
 }

@@ -6,7 +6,7 @@ import {
 import { CreateRentaDto } from './dto/create-renta.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Renta } from './entities/renta.entity';
-import { LessThan, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import { Cuarto } from 'src/cuartos/entities/cuarto.entity';
 import { Cama } from 'src/camas/entities/cama.entity';
@@ -18,6 +18,8 @@ import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Cron } from '@nestjs/schedule';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
+import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
+import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
 
 @Injectable()
 export class RentaService {
@@ -39,10 +41,16 @@ export class RentaService {
 
     @InjectRepository(Empresa)
     private empresaRepository: Repository<Empresa>,
+
+    @InjectRepository(AlojamientoServicio)
+    private alojamientoServicioRepository: Repository<AlojamientoServicio>,
+
+    @InjectRepository(RentaServicio)
+    private rentaServicioRepository: Repository<RentaServicio>,
   ) {}
 
   async crearRenta(createRentaDto: CreateRentaDto, user: UserActiveInterface) {
-    // 1. Validar empresa del usuario
+    // 1. Validar empresa
     const empresa = await this.empresaRepository.findOne({
       where: { id_empresa: user.id_empresa },
     });
@@ -51,10 +59,10 @@ export class RentaService {
       throw new BadRequestException('Empresa no encontrada');
     }
 
-    // 2. Validar el tipo de renta y limpiar IDs no necesarios
+    // 2. Limpiar datos según tipo
     const rentaData = this.limpiarDatosRenta(createRentaDto);
 
-    // 3. Validar disponibilidad y obtener precio
+    // 3. Validar disponibilidad y precio base
     const validacion = await this.validarDisponibilidadYPrecio(rentaData, user);
 
     if (!validacion.disponible) {
@@ -68,18 +76,82 @@ export class RentaService {
       rentaData.meses_a_pagar,
     );
 
-    // 5. Calcular monto total
     const precioMensual = validacion.precioMensual;
-    const montoTotal = precioMensual * rentaData.meses_a_pagar;
+    const subtotalBase = precioMensual * rentaData.meses_a_pagar;
 
-    // 6. Crear renta en transacción
+    // 🔥 5. Obtener SIEMPRE el id_alojamiento real
+    let idAlojamientoFinal: number;
+
+    if (rentaData.tipo_renta === TipoRenta.ALOJAMIENTO_COMPLETO) {
+      idAlojamientoFinal = rentaData.id_alojamiento;
+    }
+
+    if (rentaData.tipo_renta === TipoRenta.CUARTO) {
+      const cuarto = await this.cuartoRepository.findOne({
+        where: { id_cuarto: rentaData.id_cuarto },
+        relations: ['alojamiento'],
+      });
+
+      if (!cuarto) {
+        throw new BadRequestException('Cuarto no encontrado');
+      }
+
+      idAlojamientoFinal = cuarto.alojamiento.id_alojamiento;
+    }
+
+    if (rentaData.tipo_renta === TipoRenta.CAMA) {
+      const cama = await this.camaRepository.findOne({
+        where: { id_cama: rentaData.id_cama },
+        relations: ['cuarto', 'cuarto.alojamiento'],
+      });
+
+      if (!cama) {
+        throw new BadRequestException('Cama no encontrada');
+      }
+
+      idAlojamientoFinal = cama.cuarto.alojamiento.id_alojamiento;
+    }
+
+    // 🔥 6. Calcular servicios (APLICA A TODOS LOS TIPOS)
+    let totalServicios = 0;
+    let serviciosEncontrados: AlojamientoServicio[] = [];
+
+    if (createRentaDto.serviciosSeleccionados?.length) {
+      serviciosEncontrados = await this.alojamientoServicioRepository
+        .createQueryBuilder('als')
+        .innerJoinAndSelect('als.servicio', 'servicio')
+        .where('als.alojamiento_id = :idAlojamiento', {
+          idAlojamiento: idAlojamientoFinal,
+        })
+        .andWhere('als.id IN (:...ids)', {
+          ids: createRentaDto.serviciosSeleccionados,
+        })
+        .getMany();
+
+      if (
+        serviciosEncontrados.length !==
+        createRentaDto.serviciosSeleccionados.length
+      ) {
+        throw new BadRequestException(
+          'Uno o más servicios no pertenecen a este alojamiento',
+        );
+      }
+
+      totalServicios = serviciosEncontrados.reduce((acc, s) => {
+        return acc + Number(s.costo || 0);
+      }, 0);
+    }
+
+    const montoTotal = subtotalBase + totalServicios;
+
+    // 🔥 7. Transacción
     const queryRunner =
       this.rentaRepository.manager.connection.createQueryRunner();
+
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Crear la renta con solo los campos necesarios
       const renta = this.rentaRepository.create({
         tipo_renta: rentaData.tipo_renta,
         id_alojamiento: rentaData.id_alojamiento || null,
@@ -98,7 +170,20 @@ export class RentaService {
 
       const rentaGuardada = await queryRunner.manager.save(renta);
 
-      // Crear el pago
+      // 🔥 Guardar servicios en renta_servicios
+      for (const servicio of serviciosEncontrados) {
+        const rentaServicio = this.rentaServicioRepository.create({
+          id_renta: rentaGuardada.id_renta,
+          id_servicio: servicio.servicio.id_servicio,
+          precio: servicio.costo,
+          userEmail: user.email,
+          id_empresa: user.id_empresa,
+        });
+
+        await queryRunner.manager.save(rentaServicio);
+      }
+
+      // Crear pago
       const pago = this.pagoRepository.create({
         id_renta: rentaGuardada.id_renta,
         monto: montoTotal,
@@ -113,10 +198,10 @@ export class RentaService {
         renta: rentaGuardada,
         monto_a_pagar: montoTotal,
         precio_mensual: precioMensual,
+        total_servicios: totalServicios,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error('Error al crear renta:', error);
       throw error;
     } finally {
       await queryRunner.release();
@@ -175,13 +260,11 @@ export class RentaService {
     await queryRunner.startTransaction();
 
     try {
-      const renta = await this.rentaRepository.findOne({
-        where: {
-          id_renta: idRenta,
-          empresa: { id_empresa: user.id_empresa },
-        },
-        relations: ['alojamiento', 'cuarto', 'cama', 'empresa'],
-      });
+      const renta = await queryRunner.manager
+        .createQueryBuilder(Renta, 'renta')
+        .setLock('pessimistic_write')
+        .where('renta.id_renta = :idRenta', { idRenta })
+        .getOne();
 
       if (!renta) {
         throw new NotFoundException('Renta no encontrada');
@@ -195,6 +278,8 @@ export class RentaService {
         throw new NotFoundException('Pago no encontrado');
       }
 
+      await this.validarDisponibilidadAntesDeActivar(renta);
+
       pago.estado = EstadoPago.COMPLETADO;
       pago.metodo_pago = datosPago.metodo_pago;
       pago.transaccion_id = datosPago.transaccion_id;
@@ -203,6 +288,8 @@ export class RentaService {
 
       renta.estado = EstadoRenta.ACTIVA;
       await queryRunner.manager.save(renta);
+
+      await this.cancelarRentasPendientesDelMismoEspacio(queryRunner, renta);
 
       await this.actualizarEstadoRecursoCascada(
         queryRunner,
@@ -479,6 +566,88 @@ export class RentaService {
         );
 
         break;
+    }
+  }
+
+  private async validarDisponibilidadAntesDeActivar(
+    renta: Renta,
+  ): Promise<void> {
+    let conflicto = 0;
+
+    switch (renta.tipo_renta) {
+      case TipoRenta.ALOJAMIENTO_COMPLETO:
+        conflicto = await this.rentaRepository.count({
+          where: {
+            id_alojamiento: renta.id_alojamiento,
+            estado: EstadoRenta.ACTIVA,
+          },
+        });
+        break;
+
+      case TipoRenta.CUARTO:
+        conflicto = await this.rentaRepository.count({
+          where: {
+            id_cuarto: renta.id_cuarto,
+            estado: EstadoRenta.ACTIVA,
+          },
+        });
+        break;
+
+      case TipoRenta.CAMA:
+        conflicto = await this.rentaRepository.count({
+          where: {
+            id_cama: renta.id_cama,
+            estado: EstadoRenta.ACTIVA,
+          },
+        });
+        break;
+    }
+
+    if (conflicto > 0) {
+      throw new BadRequestException(
+        'Este espacio ya fue ocupado por otro usuario',
+      );
+    }
+  }
+
+  private async cancelarRentasPendientesDelMismoEspacio(
+    queryRunner: any,
+    renta: Renta,
+  ) {
+    let whereCondition: any = {
+      estado: EstadoRenta.PENDIENTE,
+    };
+
+    switch (renta.tipo_renta) {
+      case TipoRenta.ALOJAMIENTO_COMPLETO:
+        whereCondition.id_alojamiento = renta.id_alojamiento;
+        break;
+
+      case TipoRenta.CUARTO:
+        whereCondition.id_cuarto = renta.id_cuarto;
+        break;
+
+      case TipoRenta.CAMA:
+        whereCondition.id_cama = renta.id_cama;
+        break;
+    }
+
+    // Excluir la renta actual
+    const rentasPendientes = await queryRunner.manager.find(Renta, {
+      where: whereCondition,
+    });
+
+    for (const rentaPendiente of rentasPendientes) {
+      if (rentaPendiente.id_renta === renta.id_renta) continue;
+
+      rentaPendiente.estado = EstadoRenta.CANCELADA;
+      await queryRunner.manager.save(rentaPendiente);
+
+      await queryRunner.manager.update(
+        Pago,
+        { id_renta: rentaPendiente.id_renta },
+        { estado: EstadoPago.CANCELADO },
+      );
     }
   }
 

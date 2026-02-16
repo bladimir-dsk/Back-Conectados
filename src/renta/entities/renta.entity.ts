@@ -16,6 +16,7 @@ import { EstadoRenta } from 'src/common/enums/estadoRenta.enum';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Pago } from 'src/pago/entities/pago.entity';
+import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
 
 @Entity('rentas')
 export class Renta {
@@ -89,4 +90,7 @@ export class Renta {
 
   @OneToMany(() => Pago, (pago) => pago.renta)
   pagos: Pago[];
+
+  @OneToMany(() => RentaServicio, (rentaServicio) => rentaServicio.renta)
+  rentaServicios: RentaServicio[];
 }
