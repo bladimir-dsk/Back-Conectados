@@ -61,13 +61,20 @@ export class AlojamientoServiciosService {
       throw new BadRequestException('Algunos servicios ya están asignados');
     }
 
+    //cuando el costo es null, se asigna el costo del servicio en 0
+    dto.servicios.forEach((item) => {
+      if (item.costo === null) {
+        item.costo = 0;
+      }
+    });
+
     const entities = dto.servicios.map((item) => {
       const servicio = servicios.find(
         (s) => s.id_servicio === item.servicio_id,
       );
 
       return this.alojamientoServicioRepository.create({
-        costo: item.costo ?? null,
+        costo: item.costo,
         empresa,
         alojamiento,
         servicio,

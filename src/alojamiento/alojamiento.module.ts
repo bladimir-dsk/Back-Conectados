@@ -9,6 +9,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
+import { Foto } from 'src/fotos/entities/foto.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamie
       PlanVigencia,
       Propietario,
       AlojamientoServicio,
+      Foto,
     ]),
   ],
   controllers: [AlojamientoController],

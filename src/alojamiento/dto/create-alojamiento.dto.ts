@@ -1,11 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
   IsNotEmpty,
-  IsArray,
   IsString,
   IsNumber,
-  IsUrl,
   IsOptional,
   IsInt,
   IsEnum,
@@ -18,11 +15,6 @@ export class CreateAlojamientoDto {
   @IsString()
   @IsNotEmpty()
   name: string;
-
-  @ApiProperty()
-  @IsString()
-  @IsUrl()
-  url: string;
 
   @ApiProperty()
   @IsString()
