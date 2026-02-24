@@ -143,10 +143,13 @@ export class CalificacionService {
       where: {
         id_calificacion: id,
         empresa: {
-          id_empresa: user.id_empresa,
+          users: {
+            id: user.id,
+          },
         },
       },
     });
+    //validar que el update sea solo si el voto le pertenece al usuario
 
     if (!calificacion) {
       throw new BadRequestException('Calificacion no encontrada');
@@ -181,5 +184,23 @@ export class CalificacionService {
     await this.calificacionRepository.remove(calificacion);
 
     return { message: 'Calificacion eliminada', calificacion };
+  }
+  ///filtrar mi calificacion por id alojamiento
+  async findOneByAlojamiento(
+    id_alojamiento: number,
+    user: UserActiveInterface,
+  ) {
+    return this.calificacionRepository.findOne({
+      where: {
+        alojamiento: {
+          id_alojamiento,
+        },
+        empresa: {
+          users: {
+            id: user.id,
+          },
+        },
+      },
+    });
   }
 }

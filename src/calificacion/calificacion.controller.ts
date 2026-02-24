@@ -40,6 +40,15 @@ export class CalificacionController {
     return this.calificacionService.estadistica(id_alojamiento, user);
   }
 
+  @Get('mi-calificacion/:id_alojamiento')
+  @Auth(Role.ESTUDIANTE)
+  miCalificacion(
+    @Param('id_alojamiento') id_alojamiento: number,
+    @ActiveUser() user: UserActiveInterface,
+  ) {
+    return this.calificacionService.findOneByAlojamiento(id_alojamiento, user);
+  }
+
   @Get()
   @Auth([Role.ESTUDIANTE, Role.ADMIN, Role.PROPIETARIO])
   findAll(@ActiveUser() user: UserActiveInterface) {
