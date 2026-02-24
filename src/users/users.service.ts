@@ -140,6 +140,22 @@ export class UsersService {
       updateData.role = updateUserDto.role;
     }
 
+    if (updateUserDto.code !== undefined) {
+      updateData.code = updateUserDto.code;
+    }
+
+    if (updateUserDto.phone !== undefined) {
+      updateData.phone = updateUserDto.phone;
+    }
+
+    if (updateUserDto.firstName !== undefined) {
+      updateData.firstName = updateUserDto.firstName;
+    }
+
+    if (updateUserDto.middleName !== undefined) {
+      updateData.middleName = updateUserDto.middleName;
+    }
+
     // Usar QueryRunner para manejar la transacción y evitar problemas de FK
     const queryRunner =
       this.usersRepository.manager.connection.createQueryRunner();
@@ -343,6 +359,66 @@ export class UsersService {
         lastPage: Math.ceil(total / limit),
       },
     };
+  }
+
+  async updateEstudiante(id: number, updateDto: UpdateUserDto) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['School', 'empresa'],
+    });
+
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+
+    // 🔹 EMAIL
+    if (
+      updateDto.email &&
+      updateDto.email.trim() !== '' &&
+      updateDto.email !== user.email
+    ) {
+      const existingUser = await this.findOneByEmail(updateDto.email);
+      if (existingUser && existingUser.id !== id) {
+        throw new BadRequestException(
+          'El email ya está registrado por otro usuario',
+        );
+      }
+
+      user.email = updateDto.email.trim();
+    }
+
+    // 🔹 PASSWORD
+    if (updateDto.password && updateDto.password.trim() !== '') {
+      user.password = await bcryptjs.hash(updateDto.password, 10);
+    }
+
+    // 🔹 CAMPOS SIMPLES
+    if (updateDto.name !== undefined) user.name = updateDto.name;
+    if (updateDto.code !== undefined) user.code = updateDto.code;
+    if (updateDto.phone !== undefined) user.phone = updateDto.phone;
+    if (updateDto.firstName !== undefined) user.firstName = updateDto.firstName;
+    if (updateDto.middleName !== undefined)
+      user.middleName = updateDto.middleName;
+
+    // 🔹 RELACIÓN SCHOOL
+    if (updateDto.id_school !== undefined) {
+      const school = await this.schoolRepository.findOne({
+        where: { id_school: updateDto.id_school },
+      });
+
+      if (!school) {
+        throw new BadRequestException('Escuela no encontrada');
+      }
+
+      user.School = school;
+    }
+
+    const savedUser = await this.usersRepository.save(user);
+
+    // 🔹 Nunca devolver password
+    const { password, ...userWithoutPassword } = savedUser;
+
+    return userWithoutPassword;
   }
 
   async findOneById(id: number) {

@@ -121,10 +121,6 @@ export class AuthController {
     @Param('id', ParseIntPipe) userId: number,
     @Body() updateProfileDto: UpdateProfileDto,
   ) {
-    return await this.authService.updateEstudiante(
-      user,
-      userId,
-      updateProfileDto,
-    );
+    return this.authService.updateEstudiante(user, userId, updateProfileDto);
   }
 }

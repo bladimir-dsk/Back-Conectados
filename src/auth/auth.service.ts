@@ -208,9 +208,8 @@ export class AuthService {
     userId: number,
     updateProfileDto: UpdateProfileDto,
   ) {
-    //
     if (adminUser.role !== 'admin') {
-      throw new UnauthorizedException('Solo un admin ouede editar estudiantes');
+      throw new UnauthorizedException('Solo un admin puede editar estudiantes');
     }
 
     const user = await this.usersService.findOneById(userId);
@@ -223,23 +222,14 @@ export class AuthService {
       throw new BadRequestException('El usuario no es un estudiante');
     }
 
-    if (updateProfileDto.password) {
-      updateProfileDto.password = await bcryptjs.hash(
-        updateProfileDto.password,
-        10,
-      );
-    }
-
-    const updatedUser = await this.usersService.update(
+    const updatedUser = await this.usersService.updateEstudiante(
       userId,
       updateProfileDto,
     );
 
     return {
       message: 'Estudiante actualizado exitosamente',
-      user: {
-        ...updatedUser,
-      },
+      user: updatedUser,
     };
   }
 }
