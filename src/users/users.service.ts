@@ -9,6 +9,8 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import { Role } from 'src/common/enums/rol.enum';
 import * as bcryptjs from 'bcryptjs';
 import { School } from 'src/school/entities/school.entity';
+import { Documentacion } from 'src/documentacion/entities/documentacion.entity';
+import { Estatus } from 'src/common/enums/estatus.enum';
 
 @Injectable()
 export class UsersService {
@@ -169,7 +171,7 @@ export class UsersService {
     // Retornar el usuario actualizado
     return await this.usersRepository.findOne({
       where: { id },
-      relations: ['empresa','School'],
+      relations: ['empresa', 'School'],
     });
   }
 
@@ -278,5 +280,75 @@ export class UsersService {
 
     // Usar el método seguro para actualizar
     return await this.updateSafe(currentUser.id, updateUserDto);
+  }
+
+  // Metodo para buscar estudiantes
+  async findEstudiantes(
+    user: UserActiveInterface,
+    page?: number,
+    limit?: number,
+  ) {
+    // Verificar el rol del usuario
+    if (user.role !== Role.ADMIN && user.role !== Role.PROPIETARIO) {
+      throw new BadRequestException(
+        'Solo los usuarios con perfil de Adminitrador pueden acceder a esta información',
+      );
+    }
+
+    // si no hay paginación, se trae toda la información
+    if (!page || !limit) {
+      const estudiantes = await this.usersRepository.find({
+        where: { role: Role.ESTUDIANTE },
+        relations: ['empresa', 'School', 'documentaciones'],
+      });
+
+      const data = estudiantes.map((user) => ({
+        ...user,
+        documentaciones: user.documentaciones?.map((doc) => ({
+          id_documentacion: doc.id_documentacion,
+        })),
+      }));
+      return {
+        data,
+        meta: {
+          total: data.length,
+        },
+      };
+    }
+
+    // Si sí hay page y limit, aplicamos paginación
+    const skip = (page - 1) * limit;
+    const [estudiantes, total] = await this.usersRepository.findAndCount({
+      where: { role: Role.ESTUDIANTE },
+      relations: ['empresa', 'School', 'documentaciones'],
+      skip,
+      take: limit,
+    });
+
+    const data = estudiantes.map((user) => ({
+      ...user,
+      documentaciones: user.documentaciones?.map((doc) => ({
+        id_documentacion: doc.id_documentacion,
+      })),
+    }));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        prevPage: page > 1 ? page - 1 : null,
+        nextPage: page * limit < total ? page + 1 : null,
+        lastPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOneById(id: number) {
+    return await this.usersRepository.findOne({
+      where: { id },
+      relations: ['empresa'],
+    });
   }
 }

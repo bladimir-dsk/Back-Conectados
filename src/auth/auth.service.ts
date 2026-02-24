@@ -12,6 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { UpdateUserDto } from 'src/users/dto/update-user.dto';
+import { UpdateProfileDto } from './dto/UpdateProfileDto';
 
 @Injectable()
 export class AuthService {
@@ -199,5 +200,46 @@ export class AuthService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  // Método para que un admin pueda actualizar cualquier estudiante
+  async updateEstudiante(
+    adminUser: UserActiveInterface,
+    userId: number,
+    updateProfileDto: UpdateProfileDto,
+  ) {
+    //
+    if (adminUser.role !== 'admin') {
+      throw new UnauthorizedException('Solo un admin ouede editar estudiantes');
+    }
+
+    const user = await this.usersService.findOneById(userId);
+
+    if (!user) {
+      throw new BadRequestException('El usuario no fue encontrado');
+    }
+
+    if (user.role !== 'estudiante') {
+      throw new BadRequestException('El usuario no es un estudiante');
+    }
+
+    if (updateProfileDto.password) {
+      updateProfileDto.password = await bcryptjs.hash(
+        updateProfileDto.password,
+        10,
+      );
+    }
+
+    const updatedUser = await this.usersService.update(
+      userId,
+      updateProfileDto,
+    );
+
+    return {
+      message: 'Estudiante actualizado exitosamente',
+      user: {
+        ...updatedUser,
+      },
+    };
   }
 }
