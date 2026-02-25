@@ -11,6 +11,7 @@ import {
 import { Role } from 'src/common/enums/rol.enum';
 import { School } from 'src/school/entities/school.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { Estatus } from 'src/common/enums/estatus.enum';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
@@ -57,7 +58,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @ApiProperty()
   @IsOptional()
-  estatus?: string;
+  estatus?: Estatus;
 
   @ApiProperty()
   @IsOptional()

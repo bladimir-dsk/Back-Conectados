@@ -227,6 +227,12 @@ export class AuthService {
       updateProfileDto,
     );
 
+    if (!updatedUser) {
+      return {
+        message: 'No se enviaron cambios para actualizar',
+      };
+    }
+
     return {
       message: 'Estudiante actualizado exitosamente',
       user: updatedUser,

@@ -6,6 +6,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { Estatus } from 'src/common/enums/estatus.enum';
 
 export class UpdateProfileDto {
   @ApiProperty()
@@ -43,6 +44,10 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   middleName?: string;
+
+  @ApiProperty()
+  @IsOptional()
+  estatus?: Estatus;
 
   @ApiProperty({ type: Number, nullable: true })
   @IsOptional()

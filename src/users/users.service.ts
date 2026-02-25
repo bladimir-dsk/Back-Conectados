@@ -371,47 +371,96 @@ export class UsersService {
       throw new BadRequestException('Usuario no encontrado');
     }
 
+    // Función auxiliar para verificar si un campo tiene un valor
+    const hasValue = (value?: string) =>
+      value !== undefined &&
+      value !== null &&
+      value.trim() !== '' &&
+      value.trim().toLowerCase() !== 'string';
+    let isUpdated = false; // Variable para rastrear cambios
+
     // 🔹 EMAIL
-    if (
-      updateDto.email &&
-      updateDto.email.trim() !== '' &&
-      updateDto.email !== user.email
-    ) {
-      const existingUser = await this.findOneByEmail(updateDto.email);
+    if (hasValue(updateDto.email) && updateDto.email.includes('@')) {
+      const email = updateDto.email.trim();
+      const existingUser = await this.findOneByEmail(email);
       if (existingUser && existingUser.id !== id) {
         throw new BadRequestException(
           'El email ya está registrado por otro usuario',
         );
       }
 
-      user.email = updateDto.email.trim();
+      if (email !== user.email) {
+        user.email = email;
+        isUpdated = true;
+      }
     }
 
     // 🔹 PASSWORD
-    if (updateDto.password && updateDto.password.trim() !== '') {
-      user.password = await bcryptjs.hash(updateDto.password, 10);
+    if (hasValue(updateDto.password)) {
+      user.password = await bcryptjs.hash(updateDto.password.trim(), 10);
+      isUpdated = true;
     }
 
     // 🔹 CAMPOS SIMPLES
-    if (updateDto.name !== undefined) user.name = updateDto.name;
-    if (updateDto.code !== undefined) user.code = updateDto.code;
-    if (updateDto.phone !== undefined) user.phone = updateDto.phone;
-    if (updateDto.firstName !== undefined) user.firstName = updateDto.firstName;
-    if (updateDto.middleName !== undefined)
-      user.middleName = updateDto.middleName;
+    if (hasValue(updateDto.name) && updateDto.name.trim() !== user.name) {
+      user.name = updateDto.name.trim();
+      isUpdated = true;
+    }
+
+    if (hasValue(updateDto.code) && updateDto.code.trim() !== user.code) {
+      user.code = updateDto.code.trim();
+      isUpdated = true;
+    }
+
+    if (hasValue(updateDto.phone) && updateDto.phone.trim() !== user.phone) {
+      user.phone = updateDto.phone.trim();
+      isUpdated = true;
+    }
+
+    if (
+      hasValue(updateDto.firstName) &&
+      updateDto.firstName.trim() !== user.firstName
+    ) {
+      user.firstName = updateDto.firstName.trim();
+      isUpdated = true;
+    }
+
+    if (
+      hasValue(updateDto.middleName) &&
+      updateDto.middleName.trim() !== user.middleName
+    ) {
+      user.middleName = updateDto.middleName.trim();
+      isUpdated = true;
+    }
+
+    // 🔹 Cambio de estatus
+    if (
+      updateDto.estatus &&
+      Object.values(Estatus).includes(updateDto.estatus) &&
+      updateDto.estatus !== user.estatus
+    ) {
+      user.estatus = updateDto.estatus;
+      isUpdated = true;
+    }
 
     // 🔹 RELACIÓN SCHOOL
-    if (updateDto.id_school !== undefined) {
-      const school = await this.schoolRepository.findOne({
-        where: { id_school: updateDto.id_school },
-      });
+    if (updateDto.id_school !== undefined && updateDto.id_school !== null) {
+      const schoolId = Number(updateDto.id_school);
+      if (!user.School || user.School.id_school !== schoolId) {
+        const school = await this.schoolRepository.findOne({
+          where: { id_school: schoolId },
+        });
 
-      if (!school) {
-        throw new BadRequestException('Escuela no encontrada');
+        if (!school) {
+          throw new BadRequestException('Escuela no encontrada');
+        }
+
+        user.School = school;
+        isUpdated = true;
       }
-
-      user.School = school;
     }
+
+    if (!isUpdated) return null;
 
     const savedUser = await this.usersRepository.save(user);
 
