@@ -43,6 +43,7 @@ export class AlojamientoController {
   @ApiQuery({ name: 'gender', required: false, type: String })
   @ApiQuery({ name: 'typeIncome', required: false, type: String })
   @ApiQuery({ name: 'city', required: false, type: String })
+  @ApiQuery({ name: 'estatus', required: false, type: String })
   findAll(
     @ActiveUser() user: UserActiveInterface,
     @Query('page') page?: string,
@@ -54,6 +55,7 @@ export class AlojamientoController {
     @Query('gender') gender?: string,
     @Query('typeIncome') typeIncome?: string,
     @Query('city') city?: string,
+    @Query('estatus') estatus?: string,
   ) {
     return this.alojamientoService.findAll(
       {
@@ -67,6 +69,7 @@ export class AlojamientoController {
         gender,
         typeIncome,
         city,
+        estatus,
       },
       user,
     );

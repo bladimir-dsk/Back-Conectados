@@ -102,6 +102,7 @@ export class AlojamientoService {
       gender?: string;
       typeIncome?: string;
       city?: string;
+      estatus?: string;
     },
     user: UserActiveInterface,
   ) {
@@ -161,6 +162,12 @@ export class AlojamientoService {
     if (query.city) {
       qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
         city: `%${query.city}%`,
+      });
+    }
+
+    if (query.estatus) {
+      qb.andWhere('a.estatus = :estatus', {
+        estatus: query.estatus,
       });
     }
 
