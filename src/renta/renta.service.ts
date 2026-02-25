@@ -188,6 +188,9 @@ export class RentaService {
         id_renta: rentaGuardada.id_renta,
         monto: montoTotal,
         estado: EstadoPago.PENDIENTE,
+        userEmail: user.email,
+        empresa: { id_empresa: user.id_empresa },
+        // id_empresa: user.id_empresa,
       });
 
       await queryRunner.manager.save(pago);
@@ -691,5 +694,144 @@ export class RentaService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async findRentasUser(user: UserActiveInterface, estado?: EstadoRenta) {
+    const rentas = await this.rentaRepository.find({
+      where: {
+        ...(estado ? { estado } : {}), // si no viene estado, trae todas
+        empresa: { id_empresa: user.id_empresa },
+        userEmail: user.email,
+      },
+      relations: [
+        'alojamiento',
+        'cuarto',
+        'cuarto.alojamiento',
+        'cama',
+        'cama.cuarto',
+        'cama.cuarto.alojamiento',
+        'rentaServicios',
+        'rentaServicios.servicio',
+      ],
+    });
+
+    return rentas.map((renta) => this.formatearRespuestaRenta(renta));
+  }
+
+  async findRentasPagosUser(user: UserActiveInterface, estado?: EstadoPago) {
+    const pagos = await this.pagoRepository.find({
+      where: {
+        ...(estado ? { estado } : {}),
+        empresa: { id_empresa: user.id_empresa },
+        userEmail: user.email,
+      },
+      relations: [
+        'renta',
+        'renta.alojamiento',
+        'renta.cuarto',
+        'renta.cuarto.alojamiento',
+        'renta.cama',
+        'renta.cama.cuarto',
+        'renta.cama.cuarto.alojamiento',
+        'renta.rentaServicios',
+        'renta.rentaServicios.servicio',
+      ],
+    });
+
+    return pagos.map((pago) => ({
+      id_pago: pago.id,
+      monto: pago.monto,
+      estado: pago.estado,
+      metodo_pago: pago.metodo_pago ?? null,
+      transaccion_id: pago.transaccion_id ?? null,
+      renta: this.formatearRespuestaRenta(pago.renta),
+    }));
+  }
+
+  private formatearRespuestaRenta(renta: Renta) {
+    // Resolver ubicación según tipo de renta
+    let ubicacion: any = null;
+
+    switch (renta.tipo_renta) {
+      case TipoRenta.ALOJAMIENTO_COMPLETO:
+        ubicacion = {
+          tipo: 'alojamiento_completo',
+          alojamiento: {
+            id_alojamiento: renta.alojamiento?.id_alojamiento,
+            nombre: renta.alojamiento?.name,
+            direccion: renta.alojamiento?.address,
+            estatus: renta.alojamiento?.estatus,
+          },
+        };
+        break;
+
+      case TipoRenta.CUARTO:
+        ubicacion = {
+          tipo: 'cuarto',
+          cuarto: {
+            id_cuarto: renta.cuarto?.id_cuarto,
+            nombre: renta.cuarto?.name,
+            estatus: renta.cuarto?.estatus,
+            precio: renta.cuarto?.price,
+          },
+          alojamiento: {
+            id_alojamiento: renta.cuarto?.alojamiento?.id_alojamiento,
+            nombre: renta.cuarto?.alojamiento?.name,
+            direccion: renta.cuarto?.alojamiento?.address,
+          },
+        };
+        break;
+
+      case TipoRenta.CAMA:
+        ubicacion = {
+          tipo: 'cama',
+          cama: {
+            id_cama: renta.cama?.id_cama,
+            nombre: renta.cama?.name,
+            estatus: renta.cama?.estatus,
+            precio: renta.cama?.price,
+          },
+          cuarto: {
+            id_cuarto: renta.cama?.cuarto?.id_cuarto,
+            nombre: renta.cama?.cuarto?.name,
+            estatus: renta.cama?.cuarto?.estatus,
+          },
+          alojamiento: {
+            id_alojamiento: renta.cama?.cuarto?.alojamiento?.id_alojamiento,
+            nombre: renta.cama?.cuarto?.alojamiento?.name,
+            direccion: renta.cama?.cuarto?.alojamiento?.address,
+          },
+        };
+        break;
+    }
+
+    // Mapear servicios incluidos en la renta
+    const servicios = (renta.rentaServicios ?? []).map((rs) => ({
+      id_renta_servicio: rs.id_rentaServicio,
+      id_servicio: rs.servicio?.id_servicio,
+      nombre: rs.servicio?.name,
+      precio: rs.precio,
+    }));
+
+    return {
+      id_renta: renta.id_renta,
+      tipo_renta: renta.tipo_renta,
+      estado: renta.estado,
+      fecha_entrada: renta.fecha_entrada,
+      fecha_salida: renta.fecha_salida,
+      meses_pagados: renta.meses_pagados,
+      precio_mensual: renta.precio_mensual,
+      monto_total: renta.monto_total,
+      ubicacion,
+      servicios,
+      totales: {
+        subtotal_alojamiento: renta.precio_mensual * renta.meses_pagados,
+        total_servicios: servicios.reduce(
+          (acc, s) => acc + Number(s.precio ?? 0),
+          0,
+        ),
+        monto_total: renta.monto_total,
+      },
+    };
   }
 }
