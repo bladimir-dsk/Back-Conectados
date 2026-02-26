@@ -111,4 +111,16 @@ export class AuthController {
   ) {
     return await this.authService.updateUser(user, userId, updateUserDto);
   }
+
+  // Ruta para que un admin actualice aun estudiante
+  @Patch('estudiante/:id')
+  @Auth(Role.ADMIN)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async updateEstudiante(
+    @ActiveUser() user: UserActiveInterface,
+    @Param('id', ParseIntPipe) userId: number,
+    @Body() updateProfileDto: UpdateProfileDto,
+  ) {
+    return this.authService.updateEstudiante(user, userId, updateProfileDto);
+  }
 }
