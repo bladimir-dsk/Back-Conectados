@@ -18,6 +18,7 @@ import { Alcance } from 'src/alcance/entities/alcance.entity';
 import { TerminosCondicione } from 'src/terminos-condiciones/entities/terminos-condicione.entity';
 import { Politica } from 'src/politica/entities/politica.entity';
 import { Estatus } from 'src/common/enums/estatus.enum';
+import { StudentInformation } from 'src/student-information/entities/student-information.entity';
 
 @Entity()
 export class User {
@@ -88,4 +89,10 @@ export class User {
 
   @OneToMany(() => Politica, (politica) => politica.user)
   politica: Politica[];
+
+  @OneToMany(
+    () => StudentInformation,
+    (studentInformation) => studentInformation.user,
+  )
+  studentInformations: StudentInformation[];
 }

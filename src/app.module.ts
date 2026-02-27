@@ -25,6 +25,7 @@ import { PagoModule } from './pago/pago.module';
 import { FotosModule } from './fotos/fotos.module';
 import { CalificacionModule } from './calificacion/calificacion.module';
 import { RentaServicioModule } from './renta-servicio/renta-servicio.module';
+import { StudentInformationModule } from './student-information/student-information.module';
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ dotenv.config();
     FotosModule,
     CalificacionModule,
     RentaServicioModule,
+    StudentInformationModule,
   ],
   controllers: [],
   providers: [],
