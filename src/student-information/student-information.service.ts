@@ -75,13 +75,18 @@ export class StudentInformationService {
   }
 
   async findAll(user: UserActiveInterface) {
-    return this.studentInformationRepository.find({
+    const studentInformations = await this.studentInformationRepository.find({
       where: {
         empresa: {
           id_empresa: user.id_empresa,
         },
       },
+      relations: ['user'],
     });
+    return {
+      datosDireccion: studentInformations,
+      datosPersonales: studentInformations[0]?.user,
+    };
   }
 
   findOne(id: number, user: UserActiveInterface) {
