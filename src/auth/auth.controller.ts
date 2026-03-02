@@ -114,7 +114,7 @@ export class AuthController {
 
   // Ruta para que un admin actualice aun estudiante
   @Patch('estudiante/:id')
-  @Auth(Role.ADMIN)
+  @Auth([Role.ADMIN, Role.ESTUDIANTE])
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async updateEstudiante(
     @ActiveUser() user: UserActiveInterface,

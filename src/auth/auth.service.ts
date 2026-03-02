@@ -208,7 +208,7 @@ export class AuthService {
     userId: number,
     updateProfileDto: UpdateProfileDto,
   ) {
-    if (adminUser.role !== 'admin') {
+    if (adminUser.role !== 'admin' && adminUser.role !== 'estudiante') {
       throw new UnauthorizedException('Solo un admin puede editar estudiantes');
     }
 

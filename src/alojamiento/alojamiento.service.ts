@@ -114,6 +114,7 @@ export class AlojamientoService {
       .leftJoinAndSelect('a.servicios', 'servicios')
       .leftJoinAndSelect('a.propietario', 'propietario')
       .leftJoinAndSelect('a.fotos', 'fotos') // visualizar los datos de la tabla foto
+      .leftJoinAndSelect('a.calificacion', 'calificacion')
       .where('a.empresa.id_empresa = :empresaId', {
         empresaId: user.id_empresa,
       });
@@ -177,10 +178,25 @@ export class AlojamientoService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    const dataWithRating = data.map((alojamiento) => {
+      const promedio =
+        alojamiento.calificacion && alojamiento.calificacion.length > 0
+          ? alojamiento.calificacion.reduce(
+              (acc, cal) => acc + cal.puntuacion,
+              0,
+            ) / alojamiento.calificacion.length
+          : 0;
+
+      return {
+        ...alojamiento,
+        calificacion: promedio,
+      };
+    });
+
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: dataWithRating,
       meta: {
         totalItems: total,
         itemsPerPage: limit,

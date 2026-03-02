@@ -527,22 +527,19 @@ export class RentaService {
           { estatus: nuevoEstado },
         );
 
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update(Cama)
-          .set({ estatus: nuevoEstado })
-          .where((qb) => {
-            const subQuery = qb
-              .subQuery()
-              .select('cuarto.id_cuarto')
-              .from(Cuarto, 'cuarto')
-              .where('cuarto.id_alojamiento = :idAlojamiento', {
-                idAlojamiento,
-              })
-              .getQuery();
-            return 'id_cuarto IN ' + subQuery;
-          })
-          .execute();
+        const cuartos = await queryRunner.manager.find(Cuarto, {
+          where: { id_alojamiento: idAlojamiento },
+          select: ['id_cuarto'],
+        });
+
+        if (cuartos.length > 0) {
+          const idsCuartos = cuartos.map((c) => c.id_cuarto);
+          await queryRunner.manager.update(
+            Cama,
+            { id_cuarto: In(idsCuartos) },
+            { estatus: nuevoEstado },
+          );
+        }
 
         break;
 
