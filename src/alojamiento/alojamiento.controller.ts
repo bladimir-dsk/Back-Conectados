@@ -44,6 +44,7 @@ export class AlojamientoController {
   @ApiQuery({ name: 'typeIncome', required: false, type: String })
   @ApiQuery({ name: 'city', required: false, type: String })
   @ApiQuery({ name: 'estatus', required: false, type: String })
+  @ApiQuery({ name: 'capacity', required: false, type: Number })
   findAll(
     @ActiveUser() user: UserActiveInterface,
     @Query('page') page?: string,
@@ -56,6 +57,7 @@ export class AlojamientoController {
     @Query('typeIncome') typeIncome?: string,
     @Query('city') city?: string,
     @Query('estatus') estatus?: string,
+    @Query('capacity') capacity?: string,
   ) {
     return this.alojamientoService.findAll(
       {
@@ -70,6 +72,7 @@ export class AlojamientoController {
         typeIncome,
         city,
         estatus,
+        capacity: capacity ? Number(capacity) : undefined,
       },
       user,
     );
@@ -87,6 +90,7 @@ export class AlojamientoController {
   @ApiQuery({ name: 'typeIncome', required: false, type: String })
   @ApiQuery({ name: 'city', required: false, type: String })
   @ApiParam({ name: 'id_propietario', required: true, type: Number })
+  @ApiQuery({ name: 'capacity', required: false, type: Number })
   findAllPropietario(
     @ActiveUser() user: UserActiveInterface,
     @Param('id_propietario') id_propietario: number,
@@ -99,6 +103,7 @@ export class AlojamientoController {
     @Query('gender') gender?: string,
     @Query('typeIncome') typeIncome?: string,
     @Query('city') city?: string,
+    @Query('capacity') capacity?: string,
   ) {
     return this.alojamientoService.findAllPropietario(
       {
@@ -112,6 +117,7 @@ export class AlojamientoController {
         gender,
         typeIncome,
         city,
+        capacity: capacity ? Number(capacity) : undefined,
       },
       user,
       id_propietario,

@@ -103,6 +103,7 @@ export class AlojamientoService {
       typeIncome?: string;
       city?: string;
       estatus?: string;
+      capacity?: number;
     },
     user: UserActiveInterface,
   ) {
@@ -169,6 +170,12 @@ export class AlojamientoService {
     if (query.estatus) {
       qb.andWhere('a.estatus = :estatus', {
         estatus: query.estatus,
+      });
+    }
+
+    if (query.capacity) {
+      qb.andWhere('a.capacity = :capacity', {
+        capacity: query.capacity,
       });
     }
 
@@ -325,6 +332,7 @@ export class AlojamientoService {
       longitude,
       description,
       estatus,
+      capacity,
     } = updateAlojamientoDto;
 
     Object.assign(alojamiento, {
@@ -340,6 +348,7 @@ export class AlojamientoService {
       longitude,
       description,
       estatus,
+      capacity,
       userEmail: user.email,
     });
 
@@ -494,6 +503,7 @@ export class AlojamientoService {
       gender?: string;
       typeIncome?: string;
       city?: string;
+      capacity?: number;
     },
     user: UserActiveInterface,
     id_propietario: number,
@@ -570,6 +580,12 @@ export class AlojamientoService {
     if (query.city) {
       qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
         city: `%${query.city}%`,
+      });
+    }
+
+    if (query.capacity) {
+      qb.andWhere('a.capacity = :capacity', {
+        capacity: query.capacity,
       });
     }
 

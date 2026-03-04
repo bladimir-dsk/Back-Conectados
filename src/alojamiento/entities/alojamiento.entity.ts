@@ -56,6 +56,9 @@ export class Alojamiento {
   @Column()
   longitude: string;
 
+  @Column({ nullable: true })
+  capacity: number;
+
   @Column({ type: 'enum', enum: TipoRenta })
   typeIncome: TipoRenta;
 
