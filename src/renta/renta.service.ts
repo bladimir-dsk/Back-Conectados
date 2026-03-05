@@ -20,6 +20,7 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
+import { StripeService } from 'src/stripe/stripe.service';
 
 @Injectable()
 export class RentaService {
@@ -47,6 +48,8 @@ export class RentaService {
 
     @InjectRepository(RentaServicio)
     private rentaServicioRepository: Repository<RentaServicio>,
+
+    private readonly stripeService: StripeService,
   ) {}
 
   async crearRenta(createRentaDto: CreateRentaDto, user: UserActiveInterface) {
@@ -183,6 +186,16 @@ export class RentaService {
         await queryRunner.manager.save(rentaServicio);
       }
 
+      const paymentIntent = await this.stripeService.crearPaymentIntent(
+        montoTotal,
+        'mxn',
+        {
+          id_renta: String(rentaGuardada.id_renta),
+          id_empresa: String(user.id_empresa),
+          userEmail: user.email,
+        },
+      );
+
       // Crear pago
       const pago = this.pagoRepository.create({
         id_renta: rentaGuardada.id_renta,
@@ -190,6 +203,7 @@ export class RentaService {
         estado: EstadoPago.PENDIENTE,
         userEmail: user.email,
         empresa: { id_empresa: user.id_empresa },
+        stripe_payment_intent_id: paymentIntent.id,
         // id_empresa: user.id_empresa,
       });
 
@@ -202,6 +216,7 @@ export class RentaService {
         monto_a_pagar: montoTotal,
         precio_mensual: precioMensual,
         total_servicios: totalServicios,
+        clientSecret: paymentIntent.client_secret,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -209,6 +224,71 @@ export class RentaService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // Llamado por el webhook cuando Stripe confirma el pago
+  async activarRentaPorStripe(paymentIntent: any) {
+    const pago = await this.pagoRepository.findOne({
+      where: { stripe_payment_intent_id: paymentIntent.id },
+    });
+
+    if (!pago) {
+      throw new NotFoundException('Pago no encontrado para este PaymentIntent');
+    }
+
+    // Evitar procesar dos veces
+    if (pago.estado === EstadoPago.COMPLETADO) return;
+
+    const queryRunner =
+      this.rentaRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const renta = await queryRunner.manager
+        .createQueryBuilder(Renta, 'renta')
+        .setLock('pessimistic_write')
+        .where('renta.id_renta = :id', { id: pago.id_renta })
+        .getOne();
+
+      if (!renta) throw new NotFoundException('Renta no encontrada');
+
+      await this.validarDisponibilidadAntesDeActivar(renta);
+
+      // Actualizar pago
+      pago.estado = EstadoPago.COMPLETADO;
+      pago.metodo_pago = 'stripe';
+      pago.transaccion_id = paymentIntent.id;
+      await queryRunner.manager.save(pago);
+
+      // Activar renta
+      renta.estado = EstadoRenta.ACTIVA;
+      await queryRunner.manager.save(renta);
+
+      await this.cancelarRentasPendientesDelMismoEspacio(queryRunner, renta);
+      await this.actualizarEstadoRecursoCascada(
+        queryRunner,
+        renta.tipo_renta,
+        renta.id_alojamiento,
+        renta.id_cuarto,
+        renta.id_cama,
+        EstadoAlojamiento.OCUPADO,
+      );
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async marcarPagoFallido(paymentIntent: any) {
+    await this.pagoRepository.update(
+      { stripe_payment_intent_id: paymentIntent.id },
+      { estado: EstadoPago.FALLIDO },
+    );
   }
 
   private limpiarDatosRenta(dto: CreateRentaDto): CreateRentaDto {

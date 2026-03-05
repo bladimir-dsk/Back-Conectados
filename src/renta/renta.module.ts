@@ -14,6 +14,7 @@ import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { Pago } from 'src/pago/entities/pago.entity';
 import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
+import { StripeWebhookController } from 'src/stripe/stripe.controller';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamie
       Pago,
       AlojamientoServicio,
       RentaServicio,
+      // StripeWebhookController,
     ]),
   ],
   controllers: [RentaController],

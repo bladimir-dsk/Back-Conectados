@@ -3,4 +3,5 @@ export enum EstadoPago {
   COMPLETADO = 'COMPLETADO',
   FALLIDO = 'FALLIDO',
   CANCELADO = 'CANCELADO',
+  PROCESANDO = 'PROCESANDO',
 }

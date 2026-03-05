@@ -26,6 +26,7 @@ import { FotosModule } from './fotos/fotos.module';
 import { CalificacionModule } from './calificacion/calificacion.module';
 import { RentaServicioModule } from './renta-servicio/renta-servicio.module';
 import { StudentInformationModule } from './student-information/student-information.module';
+import { StripeModule } from './stripe/stripe.module';
 
 dotenv.config();
 
@@ -77,6 +78,7 @@ dotenv.config();
     CalificacionModule,
     RentaServicioModule,
     StudentInformationModule,
+    StripeModule,
   ],
   controllers: [],
   providers: [],
