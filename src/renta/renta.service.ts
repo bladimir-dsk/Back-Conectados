@@ -822,6 +822,7 @@ export class RentaService {
       metodo_pago: pago.metodo_pago ?? null,
       transaccion_id: pago.transaccion_id ?? null,
       renta: this.formatearRespuestaRenta(pago.renta),
+      stripePaymentIntentId: pago.stripe_payment_intent_id ?? null,
     }));
   }
 
