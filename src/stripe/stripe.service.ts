@@ -35,4 +35,8 @@ export class StripeService {
       process.env.STRIPE_WEBHOOK_SECRET,
     );
   }
+
+  async obtenerPaymentIntent(paymentIntentId: string) {
+    return this.stripe.paymentIntents.retrieve(paymentIntentId);
+  }
 }

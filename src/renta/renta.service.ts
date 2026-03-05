@@ -509,6 +509,40 @@ export class RentaService {
     if (cuarto.estatus === EstadoAlojamiento.OCUPADO) {
       return { disponible: false, mensaje: 'Cuarto no disponible' };
     }
+    // Validar que ninguna cama del cuarto esté ocupada (por estatus)
+    const camasOcupadas = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.OCUPADO,
+      },
+    });
+
+    if (camasOcupadas > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasOcupadas} cama(s) que le pertenecen ya están ocupadas`,
+      };
+    }
+
+    // Validar que no haya rentas ACTIVAS en camas individuales de este cuarto en esas fechas
+    const rentasCamasActivas = await this.rentaRepository
+      .createQueryBuilder('renta')
+      .innerJoin(Cama, 'cama', 'cama.id_cama = renta.id_cama')
+      .where('cama.id_cuarto = :idCuarto', { idCuarto })
+      .andWhere('renta.estado = :estado', { estado: EstadoRenta.ACTIVA })
+      .andWhere(
+        '(renta.fecha_entrada <= :fechaSalida AND renta.fecha_salida >= :fechaEntrada)',
+        { fechaEntrada, fechaSalida },
+      )
+      .getCount();
+
+    if (rentasCamasActivas > 0) {
+      return {
+        disponible: false,
+        mensaje:
+          'No se puede rentar el cuarto completo porque algunas de las camas que le pertenecen ya están ocupadas',
+      };
+    }
 
     const rentasActivas = await this.rentaRepository
       .createQueryBuilder('renta')
@@ -911,5 +945,32 @@ export class RentaService {
         monto_total: renta.monto_total,
       },
     };
+  }
+
+  // renta.service.ts
+  async iniciarPago(idRenta: number, user: UserActiveInterface) {
+    const pago = await this.pagoRepository.findOne({
+      where: { id_renta: idRenta, estado: EstadoPago.PENDIENTE },
+    });
+
+    if (!pago) throw new NotFoundException('Pago no encontrado');
+
+    if (pago.stripe_payment_intent_id) {
+      const pi = await this.stripeService.obtenerPaymentIntent(
+        pago.stripe_payment_intent_id,
+      );
+      return { clientSecret: pi.client_secret };
+    }
+
+    const pi = await this.stripeService.crearPaymentIntent(
+      Number(pago.monto),
+      'mxn',
+      { id_renta: String(idRenta), userEmail: user.email },
+    );
+
+    pago.stripe_payment_intent_id = pi.id;
+    await this.pagoRepository.save(pago);
+
+    return { clientSecret: pi.client_secret };
   }
 }

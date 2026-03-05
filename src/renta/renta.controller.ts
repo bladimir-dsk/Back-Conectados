@@ -52,6 +52,14 @@ export class RentaController {
     return await this.rentaService.crearRenta(createRentaDto, user);
   }
 
+  @Post(':id/iniciar-pago')
+  async iniciarPago(
+    @Param('id') id: number,
+    @ActiveUser() user: UserActiveInterface,
+  ) {
+    return this.rentaService.iniciarPago(id, user);
+  }
+
   @Post(':id/pagar')
   @Auth([Role.ESTUDIANTE])
   async procesarPago(

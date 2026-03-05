@@ -127,8 +127,12 @@ export class AlojamientoService {
     }
 
     if (query.name) {
-      qb.andWhere('LOWER(a.name) LIKE LOWER(:name)', {
-        name: `%${query.name}%`,
+      const words = query.name.toLowerCase().trim().split(/\s+/);
+
+      words.forEach((word, index) => {
+        qb.andWhere(`LOWER(a.name) LIKE :word${index}`, {
+          [`word${index}`]: `%${word}%`,
+        });
       });
     }
     if (query.priceMin !== undefined) {
@@ -162,8 +166,12 @@ export class AlojamientoService {
     }
 
     if (query.city) {
-      qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
-        city: `%${query.city}%`,
+      const words = query.city.toLowerCase().trim().split(/\s+/);
+
+      words.forEach((word, index) => {
+        qb.andWhere(`LOWER(a.city) LIKE :word${index}`, {
+          [`word${index}`]: `%${word}%`,
+        });
       });
     }
 
