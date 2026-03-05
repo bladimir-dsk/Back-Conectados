@@ -11,6 +11,7 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import { Role } from 'src/common/enums/rol.enum';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
+import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
 
 @Injectable()
 export class AlojamientoService {
@@ -27,6 +28,8 @@ export class AlojamientoService {
     private readonly propietarioRepository: Repository<Propietario>,
     @InjectRepository(AlojamientoServicio)
     private readonly alojamientoServicioRepository: Repository<AlojamientoServicio>,
+    @InjectRepository(Calificacion)
+    private readonly calificacionRepository: Repository<Calificacion>,
   ) {}
 
   async create(
@@ -99,6 +102,8 @@ export class AlojamientoService {
       gender?: string;
       typeIncome?: string;
       city?: string;
+      estatus?: string;
+      capacity?: number;
     },
     user: UserActiveInterface,
   ) {
@@ -110,6 +115,7 @@ export class AlojamientoService {
       .leftJoinAndSelect('a.servicios', 'servicios')
       .leftJoinAndSelect('a.propietario', 'propietario')
       .leftJoinAndSelect('a.fotos', 'fotos') // visualizar los datos de la tabla foto
+      .leftJoinAndSelect('a.calificacion', 'calificacion')
       .where('a.empresa.id_empresa = :empresaId', {
         empresaId: user.id_empresa,
       });
@@ -161,16 +167,43 @@ export class AlojamientoService {
       });
     }
 
+    if (query.estatus) {
+      qb.andWhere('a.estatus = :estatus', {
+        estatus: query.estatus,
+      });
+    }
+
+    if (query.capacity) {
+      qb.andWhere('a.capacity = :capacity', {
+        capacity: query.capacity,
+      });
+    }
+
     qb.take(limit).skip((page - 1) * limit);
 
     qb.orderBy('a.id_alojamiento', 'DESC');
 
     const [data, total] = await qb.getManyAndCount();
 
+    const dataWithRating = data.map((alojamiento) => {
+      const promedio =
+        alojamiento.calificacion && alojamiento.calificacion.length > 0
+          ? alojamiento.calificacion.reduce(
+              (acc, cal) => acc + cal.puntuacion,
+              0,
+            ) / alojamiento.calificacion.length
+          : 0;
+
+      return {
+        ...alojamiento,
+        calificacion: promedio,
+      };
+    });
+
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: dataWithRating,
       meta: {
         totalItems: total,
         itemsPerPage: limit,
@@ -198,14 +231,29 @@ export class AlojamientoService {
 
     const alojamiento = await this.alojamientoRepository.findOne({
       where: whereConditions,
-      relations: ['servicios', 'propietario', 'fotos', 'servicios.servicio'],
+      relations: [
+        'servicios',
+        'propietario',
+        'fotos',
+        'servicios.servicio',
+        'calificacion',
+      ],
     });
 
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
 
-    return alojamiento;
+    return {
+      ...alojamiento,
+      calificacion:
+        alojamiento.calificacion.length > 0
+          ? alojamiento.calificacion.reduce(
+              (acc, cal) => acc + cal.puntuacion,
+              0,
+            ) / alojamiento.calificacion.length
+          : 0,
+    };
   }
 
   async update(
@@ -284,6 +332,7 @@ export class AlojamientoService {
       longitude,
       description,
       estatus,
+      capacity,
     } = updateAlojamientoDto;
 
     Object.assign(alojamiento, {
@@ -299,6 +348,7 @@ export class AlojamientoService {
       longitude,
       description,
       estatus,
+      capacity,
       userEmail: user.email,
     });
 
@@ -309,7 +359,17 @@ export class AlojamientoService {
     if ((user.role !== Role.ADMIN, user.role !== Role.PROPIETARIO)) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
-    const alojamiento = await this.findOne(id, user);
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: {
+        id_alojamiento: id,
+        empresa: {
+          id_empresa: user.id_empresa,
+        },
+      },
+    });
+    if (!alojamiento) {
+      throw new NotAcceptableException('Alojamiento no encontrado');
+    }
     return this.alojamientoRepository.remove(alojamiento);
   }
 
@@ -339,6 +399,7 @@ export class AlojamientoService {
         'cuartos', // ✅ Relación con cuartos
         'cuartos.camas', // ✅ Relación anidada: cuartos -> camas
         'fotos', // ✅ Relación con fotos
+        'calificacion',
       ],
     });
 
@@ -348,7 +409,16 @@ export class AlojamientoService {
       );
     }
 
-    return alojamiento;
+    return {
+      ...alojamiento,
+      calificacion:
+        alojamiento.calificacion.length > 0
+          ? alojamiento.calificacion.reduce(
+              (acc, cal) => acc + cal.puntuacion,
+              0,
+            ) / alojamiento.calificacion.length
+          : 0,
+    };
   }
 
   async findWithDetails(
@@ -382,6 +452,7 @@ export class AlojamientoService {
         'cuartos',
         'cuartos.camas',
         'fotos', // ✅ Relación con fotos
+        'calificacion',
       ],
       take: limit,
       skip: (page - 1) * limit,
@@ -399,7 +470,16 @@ export class AlojamientoService {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: data.map((alojamiento) => ({
+        ...alojamiento,
+        calificacion:
+          alojamiento.calificacion.length > 0
+            ? alojamiento.calificacion.reduce(
+                (acc, cal) => acc + cal.puntuacion,
+                0,
+              ) / alojamiento.calificacion.length
+            : 0,
+      })),
       meta: {
         totalItems: total,
         itemsPerPage: limit,
@@ -423,6 +503,7 @@ export class AlojamientoService {
       gender?: string;
       typeIncome?: string;
       city?: string;
+      capacity?: number;
     },
     user: UserActiveInterface,
     id_propietario: number,
@@ -499,6 +580,12 @@ export class AlojamientoService {
     if (query.city) {
       qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
         city: `%${query.city}%`,
+      });
+    }
+
+    if (query.capacity) {
+      qb.andWhere('a.capacity = :capacity', {
+        capacity: query.capacity,
       });
     }
 

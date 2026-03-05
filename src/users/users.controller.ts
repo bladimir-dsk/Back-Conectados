@@ -6,13 +6,16 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Role } from 'src/common/enums/rol.enum';
+import { ActiveUser } from 'src/common/decorators/active-user.decorator';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 
 @ApiBearerAuth('jwt')
 @Controller('users')
@@ -27,6 +30,22 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('estudiantes')
+  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  findEstudiantes(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.usersService.findEstudiantes(
+      user,
+      page ? +page : undefined,
+      limit ? +limit : undefined,
+    );
   }
 
   @Get(':id')

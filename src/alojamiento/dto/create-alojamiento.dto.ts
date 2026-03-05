@@ -72,4 +72,9 @@ export class CreateAlojamientoDto {
   @ApiProperty()
   @IsInt()
   id_Propietario: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @IsOptional()
+  capacity?: number;
 }

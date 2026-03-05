@@ -17,6 +17,8 @@ import { Documentacion } from 'src/documentacion/entities/documentacion.entity';
 import { Alcance } from 'src/alcance/entities/alcance.entity';
 import { TerminosCondicione } from 'src/terminos-condiciones/entities/terminos-condicione.entity';
 import { Politica } from 'src/politica/entities/politica.entity';
+import { Estatus } from 'src/common/enums/estatus.enum';
+import { StudentInformation } from 'src/student-information/entities/student-information.entity';
 
 @Entity()
 export class User {
@@ -39,6 +41,10 @@ export class User {
   //el rol por defecto lo va a guardar como user
   @Column({ type: 'enum', default: Role.ESTUDIANTE, enum: Role }) //tipamos enum para que solo pueda resivir los tipos de roles del enum
   role: Role;
+
+  //el estatus por defecto lo va a guardar como activo
+  @Column({ type: 'enum', default: Estatus.ACTIVO, enum: Estatus })
+  estatus: Estatus;
 
   @Column({ nullable: true })
   code: string;
@@ -83,4 +89,10 @@ export class User {
 
   @OneToMany(() => Politica, (politica) => politica.user)
   politica: Politica[];
+
+  @OneToMany(
+    () => StudentInformation,
+    (studentInformation) => studentInformation.user,
+  )
+  studentInformations: StudentInformation[];
 }

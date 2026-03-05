@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { RentaService } from './renta.service';
 import { CreateRentaDto } from './dto/create-renta.dto';
@@ -15,12 +16,32 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { ActiveUser } from 'src/common/decorators/active-user.decorator';
 import { Role } from 'src/common/enums/rol.enum';
+import { EstadoRenta } from 'src/common/enums/estadoRenta.enum';
+import { EstadoPago } from 'src/common/enums/estadoPago.enum';
 
 @ApiTags('renta')
 @ApiBearerAuth('jwt')
 @Controller('renta')
 export class RentaController {
   constructor(private readonly rentaService: RentaService) {}
+
+  @Get()
+  @Auth([Role.ESTUDIANTE])
+  async findRentasUser(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('estado') estado?: EstadoRenta,
+  ) {
+    return await this.rentaService.findRentasUser(user, estado);
+  }
+
+  @Get('pagos')
+  @Auth([Role.ESTUDIANTE])
+  async findRentasPagosUser(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('estado') estado?: EstadoPago,
+  ) {
+    return await this.rentaService.findRentasPagosUser(user, estado);
+  }
 
   @Post()
   @Auth([Role.ESTUDIANTE])

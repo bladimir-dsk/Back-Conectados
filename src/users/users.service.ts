@@ -9,6 +9,8 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import { Role } from 'src/common/enums/rol.enum';
 import * as bcryptjs from 'bcryptjs';
 import { School } from 'src/school/entities/school.entity';
+import { Documentacion } from 'src/documentacion/entities/documentacion.entity';
+import { Estatus } from 'src/common/enums/estatus.enum';
 
 @Injectable()
 export class UsersService {
@@ -138,6 +140,22 @@ export class UsersService {
       updateData.role = updateUserDto.role;
     }
 
+    if (updateUserDto.code !== undefined) {
+      updateData.code = updateUserDto.code;
+    }
+
+    if (updateUserDto.phone !== undefined) {
+      updateData.phone = updateUserDto.phone;
+    }
+
+    if (updateUserDto.firstName !== undefined) {
+      updateData.firstName = updateUserDto.firstName;
+    }
+
+    if (updateUserDto.middleName !== undefined) {
+      updateData.middleName = updateUserDto.middleName;
+    }
+
     // Usar QueryRunner para manejar la transacción y evitar problemas de FK
     const queryRunner =
       this.usersRepository.manager.connection.createQueryRunner();
@@ -169,7 +187,7 @@ export class UsersService {
     // Retornar el usuario actualizado
     return await this.usersRepository.findOne({
       where: { id },
-      relations: ['empresa','School'],
+      relations: ['empresa', 'School'],
     });
   }
 
@@ -278,5 +296,184 @@ export class UsersService {
 
     // Usar el método seguro para actualizar
     return await this.updateSafe(currentUser.id, updateUserDto);
+  }
+
+  // Metodo para buscar estudiantes
+  async findEstudiantes(
+    user: UserActiveInterface,
+    page?: number,
+    limit?: number,
+  ) {
+    // Verificar el rol del usuario
+    if (user.role !== Role.ADMIN && user.role !== Role.PROPIETARIO) {
+      throw new BadRequestException(
+        'Solo los usuarios con perfil de Adminitrador pueden acceder a esta información',
+      );
+    }
+
+    // si no hay paginación, se trae toda la información
+    if (!page || !limit) {
+      const estudiantes = await this.usersRepository.find({
+        where: { role: Role.ESTUDIANTE },
+        relations: ['empresa', 'School', 'documentaciones'],
+      });
+
+      const data = estudiantes.map((user) => ({
+        ...user,
+        documentaciones: user.documentaciones?.map((doc) => ({
+          id_documentacion: doc.id_documentacion,
+        })),
+      }));
+      return {
+        data,
+        meta: {
+          total: data.length,
+        },
+      };
+    }
+
+    // Si sí hay page y limit, aplicamos paginación
+    const skip = (page - 1) * limit;
+    const [estudiantes, total] = await this.usersRepository.findAndCount({
+      where: { role: Role.ESTUDIANTE },
+      relations: ['empresa', 'School', 'documentaciones'],
+      skip,
+      take: limit,
+    });
+
+    const data = estudiantes.map((user) => ({
+      ...user,
+      documentaciones: user.documentaciones?.map((doc) => ({
+        id_documentacion: doc.id_documentacion,
+      })),
+    }));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        prevPage: page > 1 ? page - 1 : null,
+        nextPage: page * limit < total ? page + 1 : null,
+        lastPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async updateEstudiante(id: number, updateDto: UpdateUserDto) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['School', 'empresa'],
+    });
+
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+
+    // Función auxiliar para verificar si un campo tiene un valor
+    const hasValue = (value?: string) =>
+      value !== undefined &&
+      value !== null &&
+      value.trim() !== '' &&
+      value.trim().toLowerCase() !== 'string';
+    let isUpdated = false; // Variable para rastrear cambios
+
+    // 🔹 EMAIL
+    if (hasValue(updateDto.email) && updateDto.email.includes('@')) {
+      const email = updateDto.email.trim();
+      const existingUser = await this.findOneByEmail(email);
+      if (existingUser && existingUser.id !== id) {
+        throw new BadRequestException(
+          'El email ya está registrado por otro usuario',
+        );
+      }
+
+      if (email !== user.email) {
+        user.email = email;
+        isUpdated = true;
+      }
+    }
+
+    // 🔹 PASSWORD
+    if (hasValue(updateDto.password)) {
+      user.password = await bcryptjs.hash(updateDto.password.trim(), 10);
+      isUpdated = true;
+    }
+
+    // 🔹 CAMPOS SIMPLES
+    if (hasValue(updateDto.name) && updateDto.name.trim() !== user.name) {
+      user.name = updateDto.name.trim();
+      isUpdated = true;
+    }
+
+    if (hasValue(updateDto.code) && updateDto.code.trim() !== user.code) {
+      user.code = updateDto.code.trim();
+      isUpdated = true;
+    }
+
+    if (hasValue(updateDto.phone) && updateDto.phone.trim() !== user.phone) {
+      user.phone = updateDto.phone.trim();
+      isUpdated = true;
+    }
+
+    if (
+      hasValue(updateDto.firstName) &&
+      updateDto.firstName.trim() !== user.firstName
+    ) {
+      user.firstName = updateDto.firstName.trim();
+      isUpdated = true;
+    }
+
+    if (
+      hasValue(updateDto.middleName) &&
+      updateDto.middleName.trim() !== user.middleName
+    ) {
+      user.middleName = updateDto.middleName.trim();
+      isUpdated = true;
+    }
+
+    // 🔹 Cambio de estatus
+    if (
+      updateDto.estatus &&
+      Object.values(Estatus).includes(updateDto.estatus) &&
+      updateDto.estatus !== user.estatus
+    ) {
+      user.estatus = updateDto.estatus;
+      isUpdated = true;
+    }
+
+    // 🔹 RELACIÓN SCHOOL
+    if (updateDto.id_school !== undefined && updateDto.id_school !== null) {
+      const schoolId = Number(updateDto.id_school);
+      if (!user.School || user.School.id_school !== schoolId) {
+        const school = await this.schoolRepository.findOne({
+          where: { id_school: schoolId },
+        });
+
+        if (!school) {
+          throw new BadRequestException('Escuela no encontrada');
+        }
+
+        user.School = school;
+        isUpdated = true;
+      }
+    }
+
+    if (!isUpdated) return null;
+
+    const savedUser = await this.usersRepository.save(user);
+
+    // 🔹 Nunca devolver password
+    const { password, ...userWithoutPassword } = savedUser;
+
+    return userWithoutPassword;
+  }
+
+  async findOneById(id: number) {
+    return await this.usersRepository.findOne({
+      where: { id },
+      relations: ['empresa'],
+    });
   }
 }
