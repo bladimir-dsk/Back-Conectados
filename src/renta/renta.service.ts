@@ -823,10 +823,14 @@ export class RentaService {
         'cama.cuarto.alojamiento',
         'rentaServicios',
         'rentaServicios.servicio',
+        'pagos',
       ],
     });
 
-    return rentas.map((renta) => this.formatearRespuestaRenta(renta));
+    return rentas.map((renta) => ({
+      ...this.formatearRespuestaRenta(renta),
+      id_pago: renta.pagos?.[0]?.id || null,
+    }));
   }
 
   async findRentasPagosUser(user: UserActiveInterface, estado?: EstadoPago) {
