@@ -21,6 +21,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
 import { StripeService } from 'src/stripe/stripe.service';
+import { UpdateEstadoRentaDto } from './dto/update-renta.dto';
 
 @Injectable()
 export class RentaService {
@@ -972,5 +973,56 @@ export class RentaService {
     await this.pagoRepository.save(pago);
 
     return { clientSecret: pi.client_secret };
+  }
+
+  async actualizarEstadoRenta(
+    updateEstadoRentaDto: UpdateEstadoRentaDto,
+    user: UserActiveInterface,
+  ) {
+    const { id_renta, estado } = updateEstadoRentaDto;
+
+    const renta = await this.rentaRepository.findOne({
+      where: { id_renta },
+      relations: ['pagos'],
+    });
+
+    if (!renta) {
+      throw new NotFoundException('Renta no encontrada');
+    }
+
+    const queryRunner =
+      this.rentaRepository.manager.connection.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // actualizar estado renta
+      renta.estado = estado;
+
+      await queryRunner.manager.save(renta);
+
+      // si se cancela la renta cancelar el pago
+      if (estado === EstadoRenta.CANCELADA) {
+        await queryRunner.manager.update(
+          Pago,
+          { renta: { id_renta: renta.id_renta } },
+          { estado: EstadoPago.CANCELADO },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Estado actualizado correctamente',
+        renta_id: renta.id_renta,
+        estado_renta: renta.estado,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
