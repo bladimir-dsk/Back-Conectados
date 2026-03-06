@@ -43,6 +43,16 @@ export class RentaController {
     return await this.rentaService.findRentasPagosUser(user, estado);
   }
 
+  @Get('pagos/:id')
+  @Auth([Role.ESTUDIANTE])
+  async findRentasPagosUserIDpago(
+    @Param('id') id: number,
+    @ActiveUser() user: UserActiveInterface,
+    @Query('estado') estado?: EstadoPago,
+  ) {
+    return await this.rentaService.findRentasPagosUserIDpago(id, user, estado);
+  }
+
   @Post()
   @Auth([Role.ESTUDIANTE])
   async crearRenta(
