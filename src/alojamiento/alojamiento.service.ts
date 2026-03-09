@@ -1,4 +1,8 @@
-import { Injectable, NotAcceptableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotAcceptableException,
+} from '@nestjs/common';
 import { CreateAlojamientoDto } from './dto/create-alojamiento.dto';
 import { UpdateAlojamientoDto } from './dto/update-alojamiento.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -41,30 +45,42 @@ export class AlojamientoService {
         id_empresa: user.id_empresa,
       },
     });
+
     if (!empresa) {
       throw new NotAcceptableException('Empresa no encontrada');
     }
 
-    // const planVigencia = await this.planVigenciaRepository.findOne({
-    //   where: {
-    //     id_PlanVigencia: createAlojamientoDto.id_PlanVigencia,
-    //     empresa: {
-    //       id_empresa: user.id_empresa,
-    //     },
-    //   },
-    // });
-    // if (!planVigencia) {
-    //   throw new NotAcceptableException('Plan vigencia no encontrado');
-    // }
+    let propietario: Propietario;
 
-    const propietario = await this.propietarioRepository.findOne({
-      where: {
-        id_propietario: createAlojamientoDto.id_Propietario,
-        empresa: {
-          id_empresa: user.id_empresa,
+    // 🔹 Si es ADMIN debe enviar id_propietario
+    if (user.role === Role.ADMIN) {
+      if (!createAlojamientoDto.id_Propietario) {
+        throw new BadRequestException(
+          'El id_propietario es obligatorio para el administrador',
+        );
+      }
+
+      propietario = await this.propietarioRepository.findOne({
+        where: {
+          id_propietario: createAlojamientoDto.id_Propietario,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
         },
-      },
-    });
+      });
+    }
+    // 🔹 Si es PROPIETARIO se toma automáticamente
+    else if (user.role === Role.PROPIETARIO) {
+      propietario = await this.propietarioRepository.findOne({
+        where: {
+          email: user.email,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
+        },
+      });
+    }
+
     if (!propietario) {
       throw new NotAcceptableException('Propietario no encontrado');
     }
@@ -77,6 +93,7 @@ export class AlojamientoService {
         },
       },
     });
+
     if (existingAlojamiento) {
       throw new NotAcceptableException('Alojamiento ya existe');
     }
@@ -84,10 +101,10 @@ export class AlojamientoService {
     const alojamiento = this.alojamientoRepository.create({
       ...createAlojamientoDto,
       empresa,
-      // planVigencia,
       propietario,
       userEmail: user.email,
     });
+
     return this.alojamientoRepository.save(alojamiento);
   }
 
