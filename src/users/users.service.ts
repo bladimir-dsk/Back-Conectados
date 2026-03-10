@@ -29,7 +29,10 @@ export class UsersService {
 
   //creamos un metodo para que me busque el usuario en la base de datos
   findOneByEmail(email: string) {
-    return this.usersRepository.findOneBy({ email });
+    return this.usersRepository.findOne({
+      where: { email },
+      relations: ['School'],
+    });
   }
   //buscar por email con password
   //metodo que busca el email para que me traiga los daemas datos del usuario
@@ -42,7 +45,7 @@ export class UsersService {
   }
 
   findAll() {
-    return this.usersRepository.find({ relations: ['empresa'] });
+    return this.usersRepository.find({ relations: ['empresa', 'School'] });
   }
 
   findUsuariosEmpresa() {

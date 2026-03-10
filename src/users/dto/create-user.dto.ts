@@ -35,6 +35,9 @@ export class CreateUserDto {
   nbSegundoApellido?: string;
 
   @ApiProperty()
+  id_empresa: number;
+
+  @ApiProperty()
   numTelefonoCelular?: string;
 
   @ApiProperty()

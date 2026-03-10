@@ -80,6 +80,8 @@ export class User {
 
   @OneToOne(() => Alcance, (alcance) => alcance.user)
   alcance: Alcance;
+  @Column({ nullable: true })
+  id_empresa: number;
 
   @OneToMany(
     () => TerminosCondicione,
