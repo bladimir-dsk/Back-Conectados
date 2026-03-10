@@ -63,15 +63,16 @@ export class AlojamientoController {
       {
         page: page ? Number(page) : 1,
         limit: limit ? Number(limit) : 10,
-
         name,
         priceMin: priceMin ? Number(priceMin) : undefined,
         priceMax: priceMax ? Number(priceMax) : undefined,
         typeProperty,
-        gender,
-        typeIncome,
+        gender: gender ? gender.split(',').map((g) => g.trim()) : undefined,
+        typeIncome: typeIncome
+          ? typeIncome.split(',').map((t) => t.trim())
+          : undefined,
         city,
-        estatus,
+        estatus: estatus ? estatus.split(',').map((e) => e.trim()) : undefined,
         capacity: capacity ? Number(capacity) : undefined,
       },
       user,

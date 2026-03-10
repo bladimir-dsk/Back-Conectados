@@ -116,10 +116,10 @@ export class AlojamientoService {
       priceMin?: number;
       priceMax?: number;
       typeProperty?: string;
-      gender?: string;
-      typeIncome?: string;
+      gender?: string[]; // 👈 ahora es array
+      typeIncome?: string[];
       city?: string;
-      estatus?: string;
+      estatus?: string[];
       capacity?: number;
     },
     user: UserActiveInterface,
@@ -169,19 +169,21 @@ export class AlojamientoService {
         typeProperty: query.typeProperty,
       });
     }
-
-    if (query.gender) {
-      qb.andWhere('a.gender = :gender', {
-        gender: query.gender,
-      });
+    if (query.gender && query.gender.length > 0) {
+      query.gender.length === 1
+        ? qb.andWhere('a.gender = :gender', { gender: query.gender[0] })
+        : qb.andWhere('a.gender IN (:...genders)', { genders: query.gender });
     }
 
-    if (query.typeIncome) {
-      qb.andWhere('a.typeIncome = :typeIncome', {
-        typeIncome: query.typeIncome,
-      });
+    if (query.typeIncome && query.typeIncome.length > 0) {
+      query.typeIncome.length === 1
+        ? qb.andWhere('a.typeIncome = :typeIncome', {
+            typeIncome: query.typeIncome[0],
+          })
+        : qb.andWhere('a.typeIncome IN (:...typeIncomes)', {
+            typeIncomes: query.typeIncome,
+          });
     }
-
     if (query.city) {
       const words = query.city.toLowerCase().trim().split(/\s+/);
 
@@ -192,10 +194,12 @@ export class AlojamientoService {
       });
     }
 
-    if (query.estatus) {
-      qb.andWhere('a.estatus = :estatus', {
-        estatus: query.estatus,
-      });
+    if (query.estatus && query.estatus.length > 0) {
+      query.estatus.length === 1
+        ? qb.andWhere('a.estatus = :estatus', { estatus: query.estatus[0] })
+        : qb.andWhere('a.estatus IN (:...estatuses)', {
+            estatuses: query.estatus,
+          });
     }
 
     if (query.capacity) {
