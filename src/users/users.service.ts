@@ -306,20 +306,40 @@ export class UsersService {
     user: UserActiveInterface,
     page?: number,
     limit?: number,
+    name?: string,
+    id_school?: number,
   ) {
-    // Verificar el rol del usuario
+    // Verificar rol
     if (user.role !== Role.ADMIN && user.role !== Role.PROPIETARIO) {
       throw new BadRequestException(
-        'Solo los usuarios con perfil de Adminitrador pueden acceder a esta información',
+        'Solo los usuarios con perfil de Administrador pueden acceder a esta información',
       );
     }
 
-    // si no hay paginación, se trae toda la información
-    if (!page || !limit) {
-      const estudiantes = await this.usersRepository.find({
-        where: { role: Role.ESTUDIANTE },
-        relations: ['empresa', 'School', 'documentaciones'],
+    const query = this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.empresa', 'empresa')
+      .leftJoinAndSelect('user.School', 'School')
+      .leftJoinAndSelect('user.documentaciones', 'documentaciones')
+      .where('user.role = :role', { role: Role.ESTUDIANTE });
+
+    // filtro por nombre
+    if (name) {
+      query.andWhere('user.name LIKE :name', {
+        name: `%${name}%`,
       });
+    }
+
+    // filtro por escuela
+    if (id_school) {
+      query.andWhere('School.id_school = :id_school', {
+        id_school,
+      });
+    }
+
+    // si no hay paginación
+    if (!page || !limit) {
+      const estudiantes = await query.getMany();
 
       const data = estudiantes.map((user) => ({
         ...user,
@@ -327,6 +347,7 @@ export class UsersService {
           id_documentacion: doc.id_documentacion,
         })),
       }));
+
       return {
         data,
         meta: {
@@ -335,14 +356,12 @@ export class UsersService {
       };
     }
 
-    // Si sí hay page y limit, aplicamos paginación
+    // paginación
     const skip = (page - 1) * limit;
-    const [estudiantes, total] = await this.usersRepository.findAndCount({
-      where: { role: Role.ESTUDIANTE },
-      relations: ['empresa', 'School', 'documentaciones'],
-      skip,
-      take: limit,
-    });
+
+    query.skip(skip).take(limit);
+
+    const [estudiantes, total] = await query.getManyAndCount();
 
     const data = estudiantes.map((user) => ({
       ...user,

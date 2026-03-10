@@ -36,15 +36,21 @@ export class UsersController {
   @Auth([Role.ADMIN, Role.PROPIETARIO])
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'name', required: false })
+  @ApiQuery({ name: 'id_school', required: false })
   findEstudiantes(
     @ActiveUser() user: UserActiveInterface,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('name') name?: string,
+    @Query('id_school') id_school?: number,
   ) {
     return this.usersService.findEstudiantes(
       user,
       page ? +page : undefined,
       limit ? +limit : undefined,
+      name,
+      id_school ? +id_school : undefined,
     );
   }
 
