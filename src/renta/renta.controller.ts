@@ -18,6 +18,7 @@ import { ActiveUser } from 'src/common/decorators/active-user.decorator';
 import { Role } from 'src/common/enums/rol.enum';
 import { EstadoRenta } from 'src/common/enums/estadoRenta.enum';
 import { EstadoPago } from 'src/common/enums/estadoPago.enum';
+import { UpdateEstadoRentaDto } from './dto/update-renta.dto';
 
 @ApiTags('renta')
 @ApiBearerAuth('jwt')
@@ -78,5 +79,14 @@ export class RentaController {
     @ActiveUser() user: UserActiveInterface,
   ) {
     return await this.rentaService.procesarPago(id, datosPago, user);
+  }
+
+  @Patch('EstadoRenta')
+  @Auth([Role.ESTUDIANTE])
+  async actualizarEstado(
+    @Body() updateEstadoRentaDto: UpdateEstadoRentaDto,
+    @ActiveUser() user: UserActiveInterface,
+  ) {
+    return this.rentaService.actualizarEstadoRenta(updateEstadoRentaDto, user);
   }
 }
