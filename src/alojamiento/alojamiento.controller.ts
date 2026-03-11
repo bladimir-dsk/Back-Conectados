@@ -114,9 +114,13 @@ export class AlojamientoController {
         name,
         priceMin: priceMin ? Number(priceMin) : undefined,
         priceMax: priceMax ? Number(priceMax) : undefined,
-        typeProperty,
-        gender,
-        typeIncome,
+        typeProperty: typeProperty
+          ? typeProperty.split(',').map((t) => t.trim())
+          : undefined,
+        gender: gender ? gender.split(',').map((g) => g.trim()) : undefined,
+        typeIncome: typeIncome
+          ? typeIncome.split(',').map((t) => t.trim())
+          : undefined,
         city,
         capacity: capacity ? Number(capacity) : undefined,
       },

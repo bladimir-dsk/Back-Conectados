@@ -1,5 +1,12 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  min,
+  Min,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PaginacionDto {
@@ -23,9 +30,11 @@ export class PaginacionDto {
   namePersonal?: string;
 
   @IsOptional()
-  @ApiPropertyOptional({ example: 'verificado' })
-  @IsString()
-  estatus?: string;
+  @ApiPropertyOptional({ example: ['verificado', 'activo'] })
+  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  @IsArray()
+  @IsString({ each: true })
+  estatus?: string[];
 
   @IsOptional()
   @ApiPropertyOptional({ example: 'juan@example.com' })

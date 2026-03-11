@@ -528,9 +528,9 @@ export class AlojamientoService {
       name?: string;
       priceMin?: number;
       priceMax?: number;
-      typeProperty?: string;
-      gender?: string;
-      typeIncome?: string;
+      typeProperty?: string[];
+      gender?: string[];
+      typeIncome?: string[];
       city?: string;
       capacity?: number;
     },
@@ -588,20 +588,20 @@ export class AlojamientoService {
       });
     }
 
-    if (query.typeProperty) {
-      qb.andWhere('a.typeProperty = :typeProperty', {
+    if (query.typeProperty && query.typeProperty.length > 0) {
+      qb.andWhere('a.typeProperty IN (:...typeProperty)', {
         typeProperty: query.typeProperty,
       });
     }
 
-    if (query.gender) {
-      qb.andWhere('a.gender = :gender', {
+    if (query.gender && query.gender.length > 0) {
+      qb.andWhere('a.gender IN (:...gender)', {
         gender: query.gender,
       });
     }
 
-    if (query.typeIncome) {
-      qb.andWhere('a.typeIncome = :typeIncome', {
+    if (query.typeIncome && query.typeIncome.length > 0) {
+      qb.andWhere('a.typeIncome IN (:...typeIncome)', {
         typeIncome: query.typeIncome,
       });
     }
