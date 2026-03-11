@@ -824,10 +824,14 @@ export class RentaService {
         'cama.cuarto.alojamiento',
         'rentaServicios',
         'rentaServicios.servicio',
+        'pagos',
       ],
     });
 
-    return rentas.map((renta) => this.formatearRespuestaRenta(renta));
+    return rentas.map((renta) => ({
+      ...this.formatearRespuestaRenta(renta),
+      id_pago: renta.pagos?.[0]?.id || null,
+    }));
   }
 
   async findRentasPagosUser(user: UserActiveInterface, estado?: EstadoPago) {
@@ -859,6 +863,45 @@ export class RentaService {
       renta: this.formatearRespuestaRenta(pago.renta),
       stripePaymentIntentId: pago.stripe_payment_intent_id ?? null,
     }));
+  }
+
+  async findRentasPagosUserIDpago(
+    id_pago: number,
+    user: UserActiveInterface,
+    estado?: EstadoPago,
+  ) {
+    const pago = await this.pagoRepository.findOne({
+      where: {
+        ...(estado ? { estado } : {}),
+        id: id_pago,
+        empresa: { id_empresa: user.id_empresa },
+        userEmail: user.email,
+      },
+      relations: [
+        'renta',
+        'renta.alojamiento',
+        'renta.cuarto',
+        'renta.cuarto.alojamiento',
+        'renta.cama',
+        'renta.cama.cuarto',
+        'renta.cama.cuarto.alojamiento',
+        'renta.rentaServicios',
+        'renta.rentaServicios.servicio',
+      ],
+    });
+    if (!pago) {
+      throw new NotFoundException('Pago no encontrado');
+    }
+
+    return {
+      id_pago: pago.id,
+      monto: pago.monto,
+      estado: pago.estado,
+      metodo_pago: pago.metodo_pago ?? null,
+      transaccion_id: pago.transaccion_id ?? null,
+      renta: this.formatearRespuestaRenta(pago.renta),
+      stripePaymentIntentId: pago.stripe_payment_intent_id ?? null,
+    };
   }
 
   private formatearRespuestaRenta(renta: Renta) {

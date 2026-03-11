@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 export class RegisterDto {
   @ApiProperty()
   @Transform(({ value }) => value.trim())
@@ -42,4 +48,9 @@ export class RegisterDto {
   @IsString()
   @MinLength(1)
   phone: string;
+
+  @ApiProperty()
+  @IsNumber()
+  @IsOptional()
+  id_empresa?: number;
 }

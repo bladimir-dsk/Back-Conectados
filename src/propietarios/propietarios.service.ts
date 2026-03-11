@@ -104,8 +104,13 @@ export class PropietariosService {
   }
 
   async findAll(user: UserActiveInterface, paginacion: PaginacionDto) {
-    const { paginaActual, limite, namePersonal, estatus, emailPersonal } =
-      paginacion;
+    const {
+      paginaActual,
+      limite,
+      namePersonal,
+      estatus = [],
+      emailPersonal,
+    } = paginacion;
 
     const qb = this.propietarioRepository
       .createQueryBuilder('p')
@@ -120,9 +125,10 @@ export class PropietariosService {
         namePersonal: `%${namePersonal}%`,
       });
     }
+    //ahora estatus es un array donde el la url permita verificado,activo etc
 
-    if (estatus) {
-      qb.andWhere('p.estatus = :estatus', {
+    if (estatus && estatus.length > 0) {
+      qb.andWhere('p.estatus IN (:...estatus)', {
         estatus,
       });
     }
