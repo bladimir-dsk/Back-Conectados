@@ -38,19 +38,26 @@ export class UsersController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'name', required: false })
   @ApiQuery({ name: 'id_school', required: false })
+  @ApiQuery({ name: 'estatus', required: false })
   findEstudiantes(
     @ActiveUser() user: UserActiveInterface,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('name') name?: string,
-    @Query('id_school') id_school?: number,
+    @Query('id_school') id_school?: string,
+    @Query('estatus') estatus?: string,
   ) {
+    const schools = id_school
+      ? id_school.split(',').map((id) => Number(id))
+      : undefined;
+
     return this.usersService.findEstudiantes(
       user,
       page ? +page : undefined,
       limit ? +limit : undefined,
       name,
-      id_school ? +id_school : undefined,
+      schools,
+      estatus ? estatus.split(',').map((e) => e.trim()) : undefined,
     );
   }
 

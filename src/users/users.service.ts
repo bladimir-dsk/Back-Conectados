@@ -307,7 +307,8 @@ export class UsersService {
     page?: number,
     limit?: number,
     name?: string,
-    id_school?: number,
+    id_school?: number[],
+    estatus?: string[],
   ) {
     // Verificar rol
     if (user.role !== Role.ADMIN && user.role !== Role.PROPIETARIO) {
@@ -331,9 +332,16 @@ export class UsersService {
     }
 
     // filtro por escuela
-    if (id_school) {
-      query.andWhere('School.id_school = :id_school', {
+    if (id_school && id_school.length > 0) {
+      query.andWhere('School.id_school IN (:...id_school)', {
         id_school,
+      });
+    }
+
+    // filtro por estatus
+    if (estatus && estatus.length > 0) {
+      query.andWhere('user.estatus IN (:...estatus)', {
+        estatus,
       });
     }
 
