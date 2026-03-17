@@ -33,13 +33,13 @@ export class EmpresaController {
     return this.empresaService.getEmpresa(user);
   }
 
-  @Patch(':id')
+  @Patch()
   @Auth(Role.ADMIN)
   async updateEmpresa(
-    @Param('id') id: number,
+    // @Param('id') id: number,
     @Body() updateEmpresaDto: UpdateEmpresaDto,
     @ActiveUser() user: UserActiveInterface,
   ) {
-    return this.empresaService.updateEmpresa(id, updateEmpresaDto, user);
+    return this.empresaService.updateEmpresa(updateEmpresaDto, user);
   }
 }
