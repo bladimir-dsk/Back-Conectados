@@ -1,26 +1,56 @@
 import { Injectable } from '@nestjs/common';
-import { CreatePagoDto } from './dto/create-pago.dto';
-import { UpdatePagoDto } from './dto/update-pago.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Pago } from './entities/pago.entity';
+import { Repository } from 'typeorm';
+import { Renta } from 'src/renta/entities/renta.entity';
+import { Empresa } from 'src/empresa/entities/empresa.entity';
+import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 
 @Injectable()
 export class PagoService {
-  create(createPagoDto: CreatePagoDto) {
-    return 'This action adds a new pago';
-  }
+  constructor(
+    @InjectRepository(Pago)
+    private readonly pagoRepository: Repository<Pago>,
+    @InjectRepository(Renta)
+    private rentaRepository: Repository<Renta>,
+    @InjectRepository(Empresa)
+    private empresaRepository: Repository<Empresa>,
+  ) {}
 
-  findAll() {
-    return `This action returns all pago`;
-  }
+  async getGananciasByMonth(user: UserActiveInterface) {
+    const query = `
+    SELECT
+      m.month,
+      COALESCE(SUM(p.monto), 0) as total
+    FROM generate_series(1, 12) AS m(month)
+    LEFT JOIN pago p
+      ON EXTRACT(MONTH FROM p.fecha_pago) = m.month
+      AND p.estado = 'COMPLETADO'::pago_estado_enum -- 👈 CAST
+      AND p.id_empresa = $1
+    GROUP BY m.month
+    ORDER BY m.month
+  `;
 
-  findOne(id: number) {
-    return `This action returns a #${id} pago`;
-  }
+    const result = await this.pagoRepository.query(query, [user.id_empresa]);
 
-  update(id: number, updatePagoDto: UpdatePagoDto) {
-    return `This action updates a #${id} pago`;
-  }
+    const meses = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
 
-  remove(id: number) {
-    return `This action removes a #${id} pago`;
+    return result.map((item: any) => ({
+      month: meses[item.month - 1],
+      total: Number(item.total),
+    }));
   }
 }

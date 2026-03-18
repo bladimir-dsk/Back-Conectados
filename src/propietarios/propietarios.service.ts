@@ -3,7 +3,7 @@ import { CreatePropietarioDto } from './dto/create-propietario.dto';
 import { UpdatePropietarioDto } from './dto/update-propietario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Propietario } from './entities/propietario.entity';
-import { DataSource, Repository } from 'typeorm';
+import { Between, DataSource, Repository } from 'typeorm';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { User } from 'src/users/entities/user.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
@@ -326,5 +326,54 @@ export class PropietariosService {
     }
 
     return this.propietarioRepository.remove(propietario);
+  }
+  //contar propietarios
+  async countPropietarios(user: UserActiveInterface) {
+    const now = new Date();
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
+
+    const whereBase = {
+      empresa: {
+        id_empresa: user.id_empresa,
+      },
+    };
+
+    // 🔹 total general
+    const total = await this.propietarioRepository.count({
+      where: whereBase,
+    });
+
+    // 🔹 total del mes actual
+    const totalMes = await this.propietarioRepository.count({
+      where: {
+        ...whereBase,
+        created_at: Between(startOfMonth, endOfMonth),
+      },
+    });
+
+    return {
+      total,
+      nuevosdelmes: totalMes,
+    };
+  }
+  //mi data
+  async getMyData(user: UserActiveInterface) {
+    return await this.propietarioRepository.findOne({
+      where: {
+        user: {
+          email: user.email,
+        },
+      },
+      relations: ['empresa', 'user'],
+    });
   }
 }

@@ -1068,4 +1068,555 @@ export class RentaService {
       await queryRunner.release();
     }
   }
+
+  private async resolverIdAlojamiento(renta: Renta): Promise<number> {
+    switch (renta.tipo_renta) {
+      case TipoRenta.ALOJAMIENTO_COMPLETO:
+        return renta.id_alojamiento;
+
+      case TipoRenta.CUARTO: {
+        const cuarto = await this.cuartoRepository.findOne({
+          where: { id_cuarto: renta.id_cuarto },
+          select: ['id_alojamiento'],
+        });
+        if (!cuarto) throw new NotFoundException('Cuarto no encontrado');
+        return cuarto.id_alojamiento;
+      }
+
+      case TipoRenta.CAMA: {
+        const cama = await this.camaRepository.findOne({
+          where: { id_cama: renta.id_cama },
+          relations: ['cuarto'],
+          select: { id_cama: true, cuarto: { id_alojamiento: true } },
+        });
+        if (!cama) throw new NotFoundException('Cama no encontrada');
+        return cama.cuarto.id_alojamiento;
+      }
+
+      default:
+        throw new BadRequestException('Tipo de renta no válido');
+    }
+  }
+
+  async obtenerPropietarioDeRenta(id_renta: number, user: UserActiveInterface) {
+    const renta = await this.rentaRepository.findOne({
+      where: { id_renta, empresa: { id_empresa: user.id_empresa } },
+    });
+
+    if (!renta) throw new NotFoundException('Renta no encontrada');
+
+    const idAlojamiento = await this.resolverIdAlojamiento(renta);
+
+    // Traer alojamiento → propietario → usuario en un solo query
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: { id_alojamiento: idAlojamiento },
+      // ✅ Después (el campo en Propietario se llama "user")
+      relations: ['propietario', 'propietario.user'],
+    });
+
+    if (!alojamiento?.propietario) {
+      throw new NotFoundException(
+        'Propietario no encontrado para este alojamiento',
+      );
+    }
+    const { propietario } = alojamiento;
+    return {
+      id_propietario: propietario.id_propietario,
+      nombre: propietario.namePersonal, // campos directos del Propietario
+      apellido: propietario.lastName,
+      email: propietario.email,
+      telefono: propietario.phone,
+      id_usuario: propietario.user?.id, // relación "user"
+      email_usuario: propietario.user?.email,
+    };
+  }
+
+  async reporteGananciasPropietario(
+    id_propietario: number,
+    user: UserActiveInterface,
+    filtros?: { fechaDesde?: Date; fechaHasta?: Date; estado?: EstadoRenta },
+  ) {
+    const alojamientos = await this.alojamientoRepository.find({
+      where: {
+        propietario: { id_propietario },
+        empresa: { id_empresa: user.id_empresa },
+      },
+      select: ['id_alojamiento', 'name'],
+    });
+
+    if (!alojamientos.length) {
+      throw new NotFoundException(
+        'No se encontraron alojamientos para este propietario',
+      );
+    }
+
+    const idsAlojamientos = alojamientos.map((a) => a.id_alojamiento);
+
+    // ✅ Subquery para cuartos (TypeORM resuelve el nombre real de la tabla)
+    const subqueryCuartos = this.cuartoRepository
+      .createQueryBuilder('c')
+      .select('c.id_cuarto')
+      .where('c.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    // ✅ Subquery para camas (TypeORM resuelve el nombre real de la tabla)
+    const subqueryCamas = this.camaRepository
+      .createQueryBuilder('cm')
+      .select('cm.id_cama')
+      .innerJoin('cm.cuarto', 'cuarto_cm')
+      .where('cuarto_cm.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    const query = this.pagoRepository
+      .createQueryBuilder('pago')
+      .innerJoinAndSelect('pago.renta', 'renta')
+      .leftJoinAndSelect('renta.rentaServicios', 'rs')
+      .leftJoinAndSelect('rs.servicio', 'servicio')
+      .where('pago.estado = :estadoPago', { estadoPago: EstadoPago.COMPLETADO })
+      .andWhere('pago.empresa = :idEmpresa', { idEmpresa: user.id_empresa })
+      // ✅ Tres condiciones usando subqueries tipadas
+      .andWhere(
+        `(
+        renta.id_alojamiento IN (:...idsAloj)
+        OR renta.id_cuarto   IN (${subqueryCuartos.getQuery()})
+        OR renta.id_cama     IN (${subqueryCamas.getQuery()})
+      )`,
+        {
+          idsAloj: idsAlojamientos,
+          ...subqueryCuartos.getParameters(),
+          ...subqueryCamas.getParameters(),
+        },
+      );
+
+    if (filtros?.estado) {
+      query.andWhere('renta.estado = :estadoRenta', {
+        estadoRenta: filtros.estado,
+      });
+    }
+    if (filtros?.fechaDesde) {
+      query.andWhere('renta.fecha_entrada >= :desde', {
+        desde: filtros.fechaDesde,
+      });
+    }
+    if (filtros?.fechaHasta) {
+      query.andWhere('renta.fecha_salida <= :hasta', {
+        hasta: filtros.fechaHasta,
+      });
+    }
+
+    const pagos = await query.getMany();
+
+    const totalGanado = pagos.reduce((acc, p) => acc + Number(p.monto), 0);
+    const totalServicios = pagos.reduce((acc, p) => {
+      return (
+        acc +
+        (p.renta?.rentaServicios ?? []).reduce(
+          (s, rs) => s + Number(rs.precio ?? 0),
+          0,
+        )
+      );
+    }, 0);
+
+    return {
+      id_propietario,
+      alojamientos: alojamientos.map((a) => ({
+        id: a.id_alojamiento,
+        nombre: a.name,
+      })),
+      total_rentas: pagos.length,
+      total_ganado: totalGanado,
+      subtotal_alojamientos: totalGanado - totalServicios,
+      total_servicios_adicionales: totalServicios,
+      detalle_pagos: pagos.map((p) => ({
+        id_pago: p.id,
+        id_renta: p.id_renta,
+        tipo_renta: p.renta.tipo_renta,
+        monto: p.monto,
+        fecha_entrada: p.renta.fecha_entrada,
+        fecha_salida: p.renta.fecha_salida,
+        meses_pagados: p.renta.meses_pagados,
+      })),
+    };
+  }
+
+  async reporteControlFinanciero(
+    id_propietario: number,
+    user: UserActiveInterface,
+    filtros?: {
+      fechaDesde?: Date;
+      fechaHasta?: Date;
+      estadoRenta?: EstadoRenta;
+      estadoPago?: EstadoPago;
+      tipo_renta?: TipoRenta;
+    },
+  ) {
+    // 1. Obtener alojamientos del propietario
+    const alojamientos = await this.alojamientoRepository.find({
+      where: {
+        propietario: { id_propietario },
+        empresa: { id_empresa: user.id_empresa },
+      },
+      select: ['id_alojamiento', 'name', 'address'],
+    });
+
+    if (!alojamientos.length) {
+      throw new NotFoundException(
+        'No se encontraron alojamientos para este propietario',
+      );
+    }
+
+    const idsAlojamientos = alojamientos.map((a) => a.id_alojamiento);
+
+    // 2. Subqueries para cuartos y camas (TypeORM resuelve el nombre real de tabla)
+    const subqueryCuartos = this.cuartoRepository
+      .createQueryBuilder('c')
+      .select('c.id_cuarto')
+      .where('c.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    const subqueryCamas = this.camaRepository
+      .createQueryBuilder('cm')
+      .select('cm.id_cama')
+      .innerJoin('cm.cuarto', 'cuarto_cm')
+      .where('cuarto_cm.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    // 3. Query principal de rentas con todos los datos necesarios
+    const query = this.rentaRepository
+      .createQueryBuilder('renta')
+      // Cliente que renta
+      .leftJoinAndSelect('renta.user', 'cliente')
+      // Pagos
+      .leftJoinAndSelect('renta.pagos', 'pago')
+      // Ubicación alojamiento completo
+      .leftJoinAndSelect('renta.alojamiento', 'alojamiento')
+      // Ubicación cuarto
+      .leftJoinAndSelect('renta.cuarto', 'cuarto')
+      .leftJoinAndSelect('cuarto.alojamiento', 'alojamiento_cuarto')
+      // Ubicación cama
+      .leftJoinAndSelect('renta.cama', 'cama')
+      .leftJoinAndSelect('cama.cuarto', 'cuarto_cama')
+      .leftJoinAndSelect('cuarto_cama.alojamiento', 'alojamiento_cama')
+      // Servicios contratados
+      .leftJoinAndSelect('renta.rentaServicios', 'rs')
+      .leftJoinAndSelect('rs.servicio', 'servicio')
+      .where('renta.empresa = :idEmpresa', { idEmpresa: user.id_empresa })
+      .andWhere(
+        `(
+        renta.id_alojamiento IN (:...idsAloj)
+        OR renta.id_cuarto   IN (${subqueryCuartos.getQuery()})
+        OR renta.id_cama     IN (${subqueryCamas.getQuery()})
+      )`,
+        {
+          idsAloj: idsAlojamientos,
+          ...subqueryCuartos.getParameters(),
+          ...subqueryCamas.getParameters(),
+        },
+      );
+
+    // 4. Filtros opcionales
+    if (filtros?.estadoRenta) {
+      query.andWhere('renta.estado = :estadoRenta', {
+        estadoRenta: filtros.estadoRenta,
+      });
+    }
+    if (filtros?.tipo_renta) {
+      query.andWhere('renta.tipo_renta = :tipoRenta', {
+        tipoRenta: filtros.tipo_renta,
+      });
+    }
+    if (filtros?.fechaDesde) {
+      query.andWhere('renta.fecha_entrada >= :desde', {
+        desde: filtros.fechaDesde,
+      });
+    }
+    if (filtros?.fechaHasta) {
+      query.andWhere('renta.fecha_salida <= :hasta', {
+        hasta: filtros.fechaHasta,
+      });
+    }
+    if (filtros?.estadoPago) {
+      query.andWhere('pago.estado = :estadoPago', {
+        estadoPago: filtros.estadoPago,
+      });
+    }
+
+    query.orderBy('renta.fecha_entrada', 'DESC');
+
+    const rentas = await query.getMany();
+
+    // 5. Calcular días restantes o días vencidos
+    const hoy = new Date();
+
+    const calcularDiasRestantes = (fechaSalida: Date): number => {
+      const diff = new Date(fechaSalida).getTime() - hoy.getTime();
+      return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    };
+
+    const calcularEstadoVencimiento = (
+      renta: Renta,
+    ): {
+      dias_restantes: number | null;
+      dias_vencida: number | null;
+      vence_pronto: boolean; // true si vence en los próximos 7 días
+      texto_estado: string;
+    } => {
+      if (renta.estado !== EstadoRenta.ACTIVA) {
+        return {
+          dias_restantes: null,
+          dias_vencida: null,
+          vence_pronto: false,
+          texto_estado: `Renta ${renta.estado.toLowerCase()}`,
+        };
+      }
+
+      const dias = calcularDiasRestantes(renta.fecha_salida);
+
+      if (dias < 0) {
+        return {
+          dias_restantes: null,
+          dias_vencida: Math.abs(dias),
+          vence_pronto: false,
+          texto_estado: `Vencida hace ${Math.abs(dias)} día(s)`,
+        };
+      }
+
+      return {
+        dias_restantes: dias,
+        dias_vencida: null,
+        vence_pronto: dias <= 7,
+        texto_estado:
+          dias === 0
+            ? 'Vence hoy'
+            : dias <= 7
+              ? `⚠️ Vence en ${dias} día(s)`
+              : `Vence en ${dias} día(s)`,
+      };
+    };
+
+    // 6. Resolver ubicación legible según tipo
+    const resolverUbicacion = (renta: Renta) => {
+      switch (renta.tipo_renta) {
+        case TipoRenta.ALOJAMIENTO_COMPLETO:
+          return {
+            tipo: 'Alojamiento completo',
+            nombre: renta.alojamiento?.name ?? null,
+            direccion: renta.alojamiento?.address ?? null,
+            detalle: null,
+          };
+
+        case TipoRenta.CUARTO:
+          return {
+            tipo: 'Cuarto',
+            nombre: renta.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cuarto?.name ?? 'N/A'}`,
+          };
+
+        case TipoRenta.CAMA:
+          return {
+            tipo: 'Cama',
+            nombre: renta.cama?.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cama?.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cama?.cuarto?.name ?? 'N/A'} | Cama: ${renta.cama?.name ?? 'N/A'}`,
+          };
+      }
+    };
+
+    // 7. Mapear cada renta con su detalle completo
+    const detalleRentas = rentas.map((renta) => {
+      const pagoCompletado = renta.pagos?.find(
+        (p) => p.estado === EstadoPago.COMPLETADO,
+      );
+      const pagoPendiente = renta.pagos?.find(
+        (p) => p.estado === EstadoPago.PENDIENTE,
+      );
+
+      const servicios = (renta.rentaServicios ?? []).map((rs) => ({
+        nombre: rs.servicio?.name ?? 'N/A',
+        precio: Number(rs.precio ?? 0),
+      }));
+
+      const totalServicios = servicios.reduce((acc, s) => acc + s.precio, 0);
+      const subtotalAlojamiento =
+        Number(renta.precio_mensual) * renta.meses_pagados;
+      const vencimiento = calcularEstadoVencimiento(renta);
+
+      return {
+        // —— Identificadores ——
+        id_renta: renta.id_renta,
+        estado_renta: renta.estado,
+        tipo_renta: renta.tipo_renta,
+
+        // —— Cliente (inquilino) ——
+        cliente: {
+          id_usuario: renta.user?.id ?? renta.id_usuario,
+          nombre: renta.user
+            ? `${renta.user.name ?? ''} ${renta.user.firstName ?? ''}`.trim()
+            : 'N/A',
+          email: renta.userEmail ?? renta.user?.email ?? 'N/A',
+          telefono: renta.user?.phone ?? null, // ajusta al campo real de tu User
+        },
+
+        // —— Ubicación ——
+        ubicacion: resolverUbicacion(renta),
+
+        // —— Fechas ——
+        fechas: {
+          entrada: renta.fecha_entrada,
+          salida: renta.fecha_salida,
+          meses_contratados: renta.meses_pagados,
+          registrada_el: renta.created_at,
+          ...vencimiento,
+        },
+
+        // —— Financiero ——
+        financiero: {
+          precio_mensual: Number(renta.precio_mensual),
+          subtotal_alojamiento: subtotalAlojamiento,
+          servicios_adicionales: servicios,
+          total_servicios: totalServicios,
+          monto_total: Number(renta.monto_total),
+
+          pago_completado: pagoCompletado
+            ? {
+                id_pago: pagoCompletado.id,
+                monto: Number(pagoCompletado.monto),
+                metodo: pagoCompletado.metodo_pago ?? 'stripe',
+                fecha_pago: pagoCompletado.fecha_pago,
+                transaccion_id: pagoCompletado.transaccion_id ?? null,
+                stripe_id: pagoCompletado.stripe_payment_intent_id ?? null,
+              }
+            : null,
+
+          pago_pendiente: pagoPendiente
+            ? {
+                id_pago: pagoPendiente.id,
+                monto: Number(pagoPendiente.monto),
+                stripe_id: pagoPendiente.stripe_payment_intent_id ?? null,
+              }
+            : null,
+        },
+      };
+    });
+
+    // 8. Resumen financiero global
+    const rentasActivas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.ACTIVA,
+    );
+    const rentasFinalizadas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.FINALIZADA,
+    );
+    const rentasCanceladas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.CANCELADA,
+    );
+    const proximasAVencer = rentasActivas.filter((r) => r.fechas.vence_pronto);
+
+    const ingresosTotales = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + Number(r.financiero.monto_total), 0);
+
+    const ingresosSoloAlojamiento = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + r.financiero.subtotal_alojamiento, 0);
+
+    const ingresosSoloServicios = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + r.financiero.total_servicios, 0);
+
+    const montosPendientes = detalleRentas
+      .filter((r) => r.financiero.pago_pendiente)
+      .reduce(
+        (acc, r) => acc + Number(r.financiero.pago_pendiente?.monto ?? 0),
+        0,
+      );
+
+    return {
+      // —— Encabezado ——
+      id_propietario,
+      fecha_reporte: hoy,
+      alojamientos_gestionados: alojamientos.map((a) => ({
+        id: a.id_alojamiento,
+        nombre: a.name,
+        direccion: a.address,
+      })),
+
+      // —— Resumen ejecutivo ——
+      resumen: {
+        total_rentas: detalleRentas.length,
+        activas: rentasActivas.length,
+        finalizadas: rentasFinalizadas.length,
+        canceladas: rentasCanceladas.length,
+        proximas_a_vencer: proximasAVencer.length, // vencen en ≤ 7 días
+
+        ingresos_totales_cobrados: ingresosTotales,
+        ingresos_alojamiento: ingresosSoloAlojamiento,
+        ingresos_servicios_adicionales: ingresosSoloServicios,
+        montos_pendientes_por_cobrar: montosPendientes,
+      },
+
+      // —— Alertas ——
+      alertas: {
+        rentas_proximas_a_vencer: proximasAVencer.map((r) => ({
+          id_renta: r.id_renta,
+          cliente: r.cliente.nombre,
+          email: r.cliente.email,
+          ubicacion: `${r.ubicacion.nombre} - ${r.ubicacion.detalle ?? r.ubicacion.tipo}`,
+          fecha_salida: r.fechas.salida,
+          dias_restantes: r.fechas.dias_restantes,
+        })),
+      },
+
+      // —— Detalle completo ——
+      rentas: detalleRentas,
+    };
+  }
+
+  //saber cuantas rentas ya hubo por meses tiene un campo de created_at y los que estan en estado ACTIVA
+  async getCountRentasByMonth(user: UserActiveInterface) {
+    const query = `
+    SELECT
+      m.month,
+      e.estado,
+      COALESCE(COUNT(r.id_renta), 0) as total
+    FROM generate_series(1, 12) AS m(month)
+    CROSS JOIN (
+      SELECT unnest(ARRAY['PENDIENTE','ACTIVA','FINALIZADA','CANCELADA']) AS estado
+    ) e
+    LEFT JOIN rentas r
+      ON EXTRACT(MONTH FROM r.created_at) = m.month
+      AND r.estado = e.estado::rentas_estado_enum -- 👈 🔥 CAST AQUÍ
+    GROUP BY m.month, e.estado
+    ORDER BY m.month, e.estado
+  `;
+
+    const result = await this.rentaRepository.query(query);
+
+    const meses = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    return meses.map((mes, index) => {
+      const monthNumber = index + 1;
+
+      const estados = result
+        .filter((r) => Number(r.month) === monthNumber)
+        .reduce((acc, item) => {
+          acc[item.estado] = Number(item.total);
+          return acc;
+        }, {});
+
+      return {
+        month: mes,
+        ...estados,
+      };
+    });
+  }
 }

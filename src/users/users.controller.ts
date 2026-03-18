@@ -32,6 +32,18 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('count')
+  @Auth([Role.ADMIN])
+  count(@ActiveUser() user: UserActiveInterface) {
+    return this.usersService.countEstudiantes(user);
+  }
+
+  @Get('count-by-school')
+  @Auth([Role.ADMIN])
+  countBySchool(@ActiveUser() user: UserActiveInterface) {
+    return this.usersService.countEstudiantesBySchool(user);
+  }
+
   @Get('estudiantes')
   @Auth([Role.ADMIN, Role.PROPIETARIO])
   @ApiQuery({ name: 'page', required: false })

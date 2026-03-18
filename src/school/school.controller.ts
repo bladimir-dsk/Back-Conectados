@@ -37,6 +37,12 @@ export class SchoolController {
     return this.SchoolService.findAll(user);
   }
 
+  @Get('count')
+  @Auth([Role.ADMIN])
+  count(@ActiveUser() user: UserActiveInterface) {
+    return this.SchoolService.count(user);
+  }
+
   @Get(':id')
   @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
   findOne(@Param('id') id: string, @ActiveUser() user: UserActiveInterface) {

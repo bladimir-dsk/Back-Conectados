@@ -323,4 +323,17 @@ export class DocumentacionService {
       message: 'Todos los documentos han sido aprobados',
     };
   }
+
+  //api para que me traiga las 7 ultimas solicitudes de documentacion
+  async getLast7Documentations(user: UserActiveInterface) {
+    const documents = await this.documentacionRepository.find({
+      take: 7,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+    return {
+      documents,
+    };
+  }
 }

@@ -79,6 +79,18 @@ export class AlojamientoController {
     );
   }
 
+  @Get('count')
+  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  count(@ActiveUser() user: UserActiveInterface) {
+    return this.alojamientoService.countAlojamientos(user);
+  }
+
+  @Get('alojamientos/estatus')
+  @Auth([Role.ADMIN, Role.PROPIETARIO])
+  findAlojamientosByEstatus(@ActiveUser() user: UserActiveInterface) {
+    return this.alojamientoService.findAlojamientosByEstatus(user);
+  }
+
   @Get('alojamientos/propietario/:id_propietario')
   @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
   @ApiQuery({ name: 'page', required: false, type: Number })
