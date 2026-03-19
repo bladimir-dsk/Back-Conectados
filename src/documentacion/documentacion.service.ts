@@ -264,7 +264,7 @@ export class DocumentacionService {
     const requiredDocuments = [
       TypeDocuments.INE_DELANTERA,
       TypeDocuments.INE_TRASERA,
-      TypeDocuments.PASAPORTE,
+      // TypeDocuments.PASAPORTE,
       TypeDocuments.CFE,
     ];
 
