@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
@@ -29,7 +29,10 @@ export class UsersService {
 
   //creamos un metodo para que me busque el usuario en la base de datos
   findOneByEmail(email: string) {
-    return this.usersRepository.findOneBy({ email });
+    return this.usersRepository.findOne({
+      where: { email },
+      relations: ['School'],
+    });
   }
   //buscar por email con password
   //metodo que busca el email para que me traiga los daemas datos del usuario
@@ -42,7 +45,7 @@ export class UsersService {
   }
 
   findAll() {
-    return this.usersRepository.find({ relations: ['empresa'] });
+    return this.usersRepository.find({ relations: ['empresa', 'School'] });
   }
 
   findUsuariosEmpresa() {
@@ -303,20 +306,48 @@ export class UsersService {
     user: UserActiveInterface,
     page?: number,
     limit?: number,
+    name?: string,
+    id_school?: number[],
+    estatus?: string[],
   ) {
-    // Verificar el rol del usuario
+    // Verificar rol
     if (user.role !== Role.ADMIN && user.role !== Role.PROPIETARIO) {
       throw new BadRequestException(
-        'Solo los usuarios con perfil de Adminitrador pueden acceder a esta información',
+        'Solo los usuarios con perfil de Administrador pueden acceder a esta información',
       );
     }
 
-    // si no hay paginación, se trae toda la información
-    if (!page || !limit) {
-      const estudiantes = await this.usersRepository.find({
-        where: { role: Role.ESTUDIANTE },
-        relations: ['empresa', 'School', 'documentaciones'],
+    const query = this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.empresa', 'empresa')
+      .leftJoinAndSelect('user.School', 'School')
+      .leftJoinAndSelect('user.documentaciones', 'documentaciones')
+      .where('user.role = :role', { role: Role.ESTUDIANTE });
+
+    // filtro por nombre
+    if (name) {
+      query.andWhere('user.name LIKE :name', {
+        name: `%${name}%`,
       });
+    }
+
+    // filtro por escuela
+    if (id_school && id_school.length > 0) {
+      query.andWhere('School.id_school IN (:...id_school)', {
+        id_school,
+      });
+    }
+
+    // filtro por estatus
+    if (estatus && estatus.length > 0) {
+      query.andWhere('user.estatus IN (:...estatus)', {
+        estatus,
+      });
+    }
+
+    // si no hay paginación
+    if (!page || !limit) {
+      const estudiantes = await query.getMany();
 
       const data = estudiantes.map((user) => ({
         ...user,
@@ -324,6 +355,7 @@ export class UsersService {
           id_documentacion: doc.id_documentacion,
         })),
       }));
+
       return {
         data,
         meta: {
@@ -332,14 +364,12 @@ export class UsersService {
       };
     }
 
-    // Si sí hay page y limit, aplicamos paginación
+    // paginación
     const skip = (page - 1) * limit;
-    const [estudiantes, total] = await this.usersRepository.findAndCount({
-      where: { role: Role.ESTUDIANTE },
-      relations: ['empresa', 'School', 'documentaciones'],
-      skip,
-      take: limit,
-    });
+
+    query.skip(skip).take(limit);
+
+    const [estudiantes, total] = await query.getManyAndCount();
 
     const data = estudiantes.map((user) => ({
       ...user,
@@ -475,5 +505,64 @@ export class UsersService {
       where: { id },
       relations: ['empresa'],
     });
+  }
+
+  //contar a los roles estudiantes
+  async countEstudiantes(user: UserActiveInterface) {
+    const now = new Date();
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
+
+    const whereBase = {
+      role: Role.ESTUDIANTE,
+      empresa: {
+        id_empresa: user.id_empresa,
+      },
+    };
+
+    // 🔹 total general
+    const total = await this.usersRepository.count({
+      where: whereBase,
+    });
+
+    // 🔹 total del mes actual
+    const totalMes = await this.usersRepository.count({
+      where: {
+        ...whereBase,
+        createdAt: Between(startOfMonth, endOfMonth),
+      },
+    });
+
+    return {
+      total,
+      nuevosdelmes: totalMes,
+    };
+  }
+  //traer cuantos estudiantes tiene cada escuela
+  async countEstudiantesBySchool(user: UserActiveInterface) {
+    const result = await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoin('user.School', 'school')
+      .select('school.name', 'schoolName')
+      .addSelect('COUNT(user.id)', 'total')
+      .where('user.role = :role', { role: Role.ESTUDIANTE })
+      .andWhere('user.empresa = :empresa', { empresa: user.id_empresa })
+      .andWhere('school.id_school IS NOT NULL') // excluir null
+      .groupBy('school.id_school')
+      .addGroupBy('school.name')
+      .getRawMany();
+
+    return result.map((item) => ({
+      school: item.schoolName,
+      total: Number(item.total),
+    }));
   }
 }

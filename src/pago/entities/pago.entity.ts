@@ -48,4 +48,7 @@ export class Pago {
   @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userEmail', referencedColumnName: 'email' })
   user: User;
+
+  @Column({ type: 'varchar', nullable: true })
+  stripe_payment_intent_id: string; // 🔑 clave para vincular webhook
 }

@@ -20,6 +20,8 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { RentaServicio } from 'src/renta-servicio/entities/renta-servicio.entity';
+import { StripeService } from 'src/stripe/stripe.service';
+import { UpdateEstadoRentaDto } from './dto/update-renta.dto';
 
 @Injectable()
 export class RentaService {
@@ -47,6 +49,8 @@ export class RentaService {
 
     @InjectRepository(RentaServicio)
     private rentaServicioRepository: Repository<RentaServicio>,
+
+    private readonly stripeService: StripeService,
   ) {}
 
   async crearRenta(createRentaDto: CreateRentaDto, user: UserActiveInterface) {
@@ -183,6 +187,16 @@ export class RentaService {
         await queryRunner.manager.save(rentaServicio);
       }
 
+      const paymentIntent = await this.stripeService.crearPaymentIntent(
+        montoTotal,
+        'mxn',
+        {
+          id_renta: String(rentaGuardada.id_renta),
+          id_empresa: String(user.id_empresa),
+          userEmail: user.email,
+        },
+      );
+
       // Crear pago
       const pago = this.pagoRepository.create({
         id_renta: rentaGuardada.id_renta,
@@ -190,6 +204,7 @@ export class RentaService {
         estado: EstadoPago.PENDIENTE,
         userEmail: user.email,
         empresa: { id_empresa: user.id_empresa },
+        stripe_payment_intent_id: paymentIntent.id,
         // id_empresa: user.id_empresa,
       });
 
@@ -202,6 +217,7 @@ export class RentaService {
         monto_a_pagar: montoTotal,
         precio_mensual: precioMensual,
         total_servicios: totalServicios,
+        clientSecret: paymentIntent.client_secret,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -209,6 +225,71 @@ export class RentaService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // Llamado por el webhook cuando Stripe confirma el pago
+  async activarRentaPorStripe(paymentIntent: any) {
+    const pago = await this.pagoRepository.findOne({
+      where: { stripe_payment_intent_id: paymentIntent.id },
+    });
+
+    if (!pago) {
+      throw new NotFoundException('Pago no encontrado para este PaymentIntent');
+    }
+
+    // Evitar procesar dos veces
+    if (pago.estado === EstadoPago.COMPLETADO) return;
+
+    const queryRunner =
+      this.rentaRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const renta = await queryRunner.manager
+        .createQueryBuilder(Renta, 'renta')
+        .setLock('pessimistic_write')
+        .where('renta.id_renta = :id', { id: pago.id_renta })
+        .getOne();
+
+      if (!renta) throw new NotFoundException('Renta no encontrada');
+
+      await this.validarDisponibilidadAntesDeActivar(renta);
+
+      // Actualizar pago
+      pago.estado = EstadoPago.COMPLETADO;
+      pago.metodo_pago = 'stripe';
+      pago.transaccion_id = paymentIntent.id;
+      await queryRunner.manager.save(pago);
+
+      // Activar renta
+      renta.estado = EstadoRenta.ACTIVA;
+      await queryRunner.manager.save(renta);
+
+      await this.cancelarRentasPendientesDelMismoEspacio(queryRunner, renta);
+      await this.actualizarEstadoRecursoCascada(
+        queryRunner,
+        renta.tipo_renta,
+        renta.id_alojamiento,
+        renta.id_cuarto,
+        renta.id_cama,
+        EstadoAlojamiento.OCUPADO,
+      );
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async marcarPagoFallido(paymentIntent: any) {
+    await this.pagoRepository.update(
+      { stripe_payment_intent_id: paymentIntent.id },
+      { estado: EstadoPago.FALLIDO },
+    );
   }
 
   private limpiarDatosRenta(dto: CreateRentaDto): CreateRentaDto {
@@ -428,6 +509,68 @@ export class RentaService {
 
     if (cuarto.estatus === EstadoAlojamiento.OCUPADO) {
       return { disponible: false, mensaje: 'Cuarto no disponible' };
+    }
+    // Validar que ninguna cama del cuarto esté ocupada (por estatus)
+    const camasOcupadas = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.OCUPADO,
+      },
+    });
+
+    if (camasOcupadas > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasOcupadas} cama(s) que le pertenecen ya están ocupadas`,
+      };
+    }
+
+    const camasMantenimiento = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.MANTENIMIENTO,
+      },
+    });
+
+    if (camasMantenimiento > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasMantenimiento} cama(s) que le pertenecen están en mantenimiento`,
+      };
+    }
+
+    const camasLimpieza = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.LIMPIEZA,
+      },
+    });
+
+    if (camasLimpieza > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasLimpieza} cama(s) que le pertenecen están en limpieza`,
+      };
+    }
+
+    // Validar que no haya rentas ACTIVAS en camas individuales de este cuarto en esas fechas
+    const rentasCamasActivas = await this.rentaRepository
+      .createQueryBuilder('renta')
+      .innerJoin(Cama, 'cama', 'cama.id_cama = renta.id_cama')
+      .where('cama.id_cuarto = :idCuarto', { idCuarto })
+      .andWhere('renta.estado = :estado', { estado: EstadoRenta.ACTIVA })
+      .andWhere(
+        '(renta.fecha_entrada <= :fechaSalida AND renta.fecha_salida >= :fechaEntrada)',
+        { fechaEntrada, fechaSalida },
+      )
+      .getCount();
+
+    if (rentasCamasActivas > 0) {
+      return {
+        disponible: false,
+        mensaje:
+          'No se puede rentar el cuarto completo porque algunas de las camas que le pertenecen ya están ocupadas',
+      };
     }
 
     const rentasActivas = await this.rentaRepository
@@ -652,8 +795,11 @@ export class RentaService {
   }
 
   // Tarea programada para liberar alojamientos cuando expire la renta
-  @Cron('0 0 * * *') // Ejecutar diariamente a medianoche
+  @Cron('0 0 * * *')
   async verificarRentasExpiradas() {
+    await this.procesarRentasExpiradas();
+  }
+  async procesarRentasExpiradas() {
     const hoy = new Date();
 
     const rentasExpiradas = await this.rentaRepository.find({
@@ -661,11 +807,11 @@ export class RentaService {
         estado: EstadoRenta.ACTIVA,
         fecha_salida: LessThan(hoy),
       },
-      relations: ['alojamiento', 'cuarto', 'cama'],
     });
 
     const queryRunner =
       this.rentaRepository.manager.connection.createQueryRunner();
+
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -673,20 +819,20 @@ export class RentaService {
       for (const renta of rentasExpiradas) {
         renta.estado = EstadoRenta.FINALIZADA;
         await queryRunner.manager.save(renta);
+
         await this.actualizarEstadoRecursoCascada(
           queryRunner,
           renta.tipo_renta,
           renta.id_alojamiento,
           renta.id_cuarto,
           renta.id_cama,
-          EstadoAlojamiento.ACTIVO,
+          EstadoAlojamiento.LIMPIEZA,
         );
       }
 
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error('Error al verificar rentas expiradas:', error);
       throw error;
     } finally {
       await queryRunner.release();
@@ -694,6 +840,8 @@ export class RentaService {
   }
 
   async findRentasUser(user: UserActiveInterface, estado?: EstadoRenta) {
+    // 👇 Ejecutas la lógica antes de consultar
+    await this.procesarRentasExpiradas();
     const rentas = await this.rentaRepository.find({
       where: {
         ...(estado ? { estado } : {}), // si no viene estado, trae todas
@@ -709,10 +857,14 @@ export class RentaService {
         'cama.cuarto.alojamiento',
         'rentaServicios',
         'rentaServicios.servicio',
+        'pagos',
       ],
     });
 
-    return rentas.map((renta) => this.formatearRespuestaRenta(renta));
+    return rentas.map((renta) => ({
+      ...this.formatearRespuestaRenta(renta),
+      id_pago: renta.pagos?.[0]?.id || null,
+    }));
   }
 
   async findRentasPagosUser(user: UserActiveInterface, estado?: EstadoPago) {
@@ -742,7 +894,47 @@ export class RentaService {
       metodo_pago: pago.metodo_pago ?? null,
       transaccion_id: pago.transaccion_id ?? null,
       renta: this.formatearRespuestaRenta(pago.renta),
+      stripePaymentIntentId: pago.stripe_payment_intent_id ?? null,
     }));
+  }
+
+  async findRentasPagosUserIDpago(
+    id_pago: number,
+    user: UserActiveInterface,
+    estado?: EstadoPago,
+  ) {
+    const pago = await this.pagoRepository.findOne({
+      where: {
+        ...(estado ? { estado } : {}),
+        id: id_pago,
+        empresa: { id_empresa: user.id_empresa },
+        userEmail: user.email,
+      },
+      relations: [
+        'renta',
+        'renta.alojamiento',
+        'renta.cuarto',
+        'renta.cuarto.alojamiento',
+        'renta.cama',
+        'renta.cama.cuarto',
+        'renta.cama.cuarto.alojamiento',
+        'renta.rentaServicios',
+        'renta.rentaServicios.servicio',
+      ],
+    });
+    if (!pago) {
+      throw new NotFoundException('Pago no encontrado');
+    }
+
+    return {
+      id_pago: pago.id,
+      monto: pago.monto,
+      estado: pago.estado,
+      metodo_pago: pago.metodo_pago ?? null,
+      transaccion_id: pago.transaccion_id ?? null,
+      renta: this.formatearRespuestaRenta(pago.renta),
+      stripePaymentIntentId: pago.stripe_payment_intent_id ?? null,
+    };
   }
 
   private formatearRespuestaRenta(renta: Renta) {
@@ -830,5 +1022,642 @@ export class RentaService {
         monto_total: renta.monto_total,
       },
     };
+  }
+
+  // renta.service.ts
+  async iniciarPago(idRenta: number, user: UserActiveInterface) {
+    const pago = await this.pagoRepository.findOne({
+      where: { id_renta: idRenta, estado: EstadoPago.PENDIENTE },
+    });
+
+    if (!pago) throw new NotFoundException('Pago no encontrado');
+
+    if (pago.stripe_payment_intent_id) {
+      const pi = await this.stripeService.obtenerPaymentIntent(
+        pago.stripe_payment_intent_id,
+      );
+      return { clientSecret: pi.client_secret };
+    }
+
+    const pi = await this.stripeService.crearPaymentIntent(
+      Number(pago.monto),
+      'mxn',
+      { id_renta: String(idRenta), userEmail: user.email },
+    );
+
+    pago.stripe_payment_intent_id = pi.id;
+    await this.pagoRepository.save(pago);
+
+    return { clientSecret: pi.client_secret };
+  }
+
+  async actualizarEstadoRenta(
+    updateEstadoRentaDto: UpdateEstadoRentaDto,
+    user: UserActiveInterface,
+  ) {
+    const { id_renta, estado } = updateEstadoRentaDto;
+
+    const renta = await this.rentaRepository.findOne({
+      where: { id_renta },
+      relations: ['pagos'],
+    });
+
+    if (!renta) {
+      throw new NotFoundException('Renta no encontrada');
+    }
+
+    const queryRunner =
+      this.rentaRepository.manager.connection.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // actualizar estado renta
+      renta.estado = estado;
+
+      await queryRunner.manager.save(renta);
+
+      // si se cancela la renta cancelar el pago
+      if (estado === EstadoRenta.CANCELADA) {
+        await queryRunner.manager.update(
+          Pago,
+          { renta: { id_renta: renta.id_renta } },
+          { estado: EstadoPago.CANCELADO },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Estado actualizado correctamente',
+        renta_id: renta.id_renta,
+        estado_renta: renta.estado,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  private async resolverIdAlojamiento(renta: Renta): Promise<number> {
+    switch (renta.tipo_renta) {
+      case TipoRenta.ALOJAMIENTO_COMPLETO:
+        return renta.id_alojamiento;
+
+      case TipoRenta.CUARTO: {
+        const cuarto = await this.cuartoRepository.findOne({
+          where: { id_cuarto: renta.id_cuarto },
+          select: ['id_alojamiento'],
+        });
+        if (!cuarto) throw new NotFoundException('Cuarto no encontrado');
+        return cuarto.id_alojamiento;
+      }
+
+      case TipoRenta.CAMA: {
+        const cama = await this.camaRepository.findOne({
+          where: { id_cama: renta.id_cama },
+          relations: ['cuarto'],
+          select: { id_cama: true, cuarto: { id_alojamiento: true } },
+        });
+        if (!cama) throw new NotFoundException('Cama no encontrada');
+        return cama.cuarto.id_alojamiento;
+      }
+
+      default:
+        throw new BadRequestException('Tipo de renta no válido');
+    }
+  }
+
+  async obtenerPropietarioDeRenta(id_renta: number, user: UserActiveInterface) {
+    const renta = await this.rentaRepository.findOne({
+      where: { id_renta, empresa: { id_empresa: user.id_empresa } },
+    });
+
+    if (!renta) throw new NotFoundException('Renta no encontrada');
+
+    const idAlojamiento = await this.resolverIdAlojamiento(renta);
+
+    // Traer alojamiento → propietario → usuario en un solo query
+    const alojamiento = await this.alojamientoRepository.findOne({
+      where: { id_alojamiento: idAlojamiento },
+      // ✅ Después (el campo en Propietario se llama "user")
+      relations: ['propietario', 'propietario.user'],
+    });
+
+    if (!alojamiento?.propietario) {
+      throw new NotFoundException(
+        'Propietario no encontrado para este alojamiento',
+      );
+    }
+    const { propietario } = alojamiento;
+    return {
+      id_propietario: propietario.id_propietario,
+      nombre: propietario.namePersonal, // campos directos del Propietario
+      apellido: propietario.lastName,
+      email: propietario.email,
+      telefono: propietario.phone,
+      id_usuario: propietario.user?.id, // relación "user"
+      email_usuario: propietario.user?.email,
+    };
+  }
+
+  async reporteGananciasPropietario(
+    id_propietario: number,
+    user: UserActiveInterface,
+    filtros?: { fechaDesde?: Date; fechaHasta?: Date; estado?: EstadoRenta },
+  ) {
+    const alojamientos = await this.alojamientoRepository.find({
+      where: {
+        propietario: { id_propietario },
+        empresa: { id_empresa: user.id_empresa },
+      },
+      select: ['id_alojamiento', 'name'],
+    });
+
+    if (!alojamientos.length) {
+      throw new NotFoundException(
+        'No se encontraron alojamientos para este propietario',
+      );
+    }
+
+    const idsAlojamientos = alojamientos.map((a) => a.id_alojamiento);
+
+    // ✅ Subquery para cuartos (TypeORM resuelve el nombre real de la tabla)
+    const subqueryCuartos = this.cuartoRepository
+      .createQueryBuilder('c')
+      .select('c.id_cuarto')
+      .where('c.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    // ✅ Subquery para camas (TypeORM resuelve el nombre real de la tabla)
+    const subqueryCamas = this.camaRepository
+      .createQueryBuilder('cm')
+      .select('cm.id_cama')
+      .innerJoin('cm.cuarto', 'cuarto_cm')
+      .where('cuarto_cm.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    const query = this.pagoRepository
+      .createQueryBuilder('pago')
+      .innerJoinAndSelect('pago.renta', 'renta')
+      .leftJoinAndSelect('renta.rentaServicios', 'rs')
+      .leftJoinAndSelect('rs.servicio', 'servicio')
+      .where('pago.estado = :estadoPago', { estadoPago: EstadoPago.COMPLETADO })
+      .andWhere('pago.empresa = :idEmpresa', { idEmpresa: user.id_empresa })
+      // ✅ Tres condiciones usando subqueries tipadas
+      .andWhere(
+        `(
+        renta.id_alojamiento IN (:...idsAloj)
+        OR renta.id_cuarto   IN (${subqueryCuartos.getQuery()})
+        OR renta.id_cama     IN (${subqueryCamas.getQuery()})
+      )`,
+        {
+          idsAloj: idsAlojamientos,
+          ...subqueryCuartos.getParameters(),
+          ...subqueryCamas.getParameters(),
+        },
+      );
+
+    if (filtros?.estado) {
+      query.andWhere('renta.estado = :estadoRenta', {
+        estadoRenta: filtros.estado,
+      });
+    }
+    if (filtros?.fechaDesde) {
+      query.andWhere('renta.fecha_entrada >= :desde', {
+        desde: filtros.fechaDesde,
+      });
+    }
+    if (filtros?.fechaHasta) {
+      query.andWhere('renta.fecha_salida <= :hasta', {
+        hasta: filtros.fechaHasta,
+      });
+    }
+
+    const pagos = await query.getMany();
+
+    const totalGanado = pagos.reduce((acc, p) => acc + Number(p.monto), 0);
+    const totalServicios = pagos.reduce((acc, p) => {
+      return (
+        acc +
+        (p.renta?.rentaServicios ?? []).reduce(
+          (s, rs) => s + Number(rs.precio ?? 0),
+          0,
+        )
+      );
+    }, 0);
+
+    return {
+      id_propietario,
+      alojamientos: alojamientos.map((a) => ({
+        id: a.id_alojamiento,
+        nombre: a.name,
+      })),
+      total_rentas: pagos.length,
+      total_ganado: totalGanado,
+      subtotal_alojamientos: totalGanado - totalServicios,
+      total_servicios_adicionales: totalServicios,
+      detalle_pagos: pagos.map((p) => ({
+        id_pago: p.id,
+        id_renta: p.id_renta,
+        tipo_renta: p.renta.tipo_renta,
+        monto: p.monto,
+        fecha_entrada: p.renta.fecha_entrada,
+        fecha_salida: p.renta.fecha_salida,
+        meses_pagados: p.renta.meses_pagados,
+      })),
+    };
+  }
+
+  async reporteControlFinanciero(
+    id_propietario: number | undefined, // 👈 opcional
+    user: UserActiveInterface,
+    filtros?: {
+      fechaDesde?: Date;
+      fechaHasta?: Date;
+      estadoRenta?: EstadoRenta;
+      estadoPago?: EstadoPago;
+      tipo_renta?: TipoRenta;
+    },
+  ) {
+    // 1. Obtener alojamientos — si no hay propietario, trae todos los de la empresa
+    const whereAlojamiento: any = {
+      empresa: { id_empresa: user.id_empresa },
+    };
+
+    if (id_propietario) {
+      // 👈 solo filtra si viene el id
+      whereAlojamiento.propietario = { id_propietario };
+    }
+
+    const alojamientos = await this.alojamientoRepository.find({
+      where: whereAlojamiento,
+      select: ['id_alojamiento', 'name', 'address'],
+    });
+
+    if (!alojamientos.length) {
+      throw new NotFoundException(
+        id_propietario
+          ? 'No se encontraron alojamientos para este propietario'
+          : 'No se encontraron alojamientos para esta empresa', // 👈 mensaje contextual
+      );
+    }
+
+    const idsAlojamientos = alojamientos.map((a) => a.id_alojamiento);
+
+    // 2. Subqueries para cuartos y camas (TypeORM resuelve el nombre real de tabla)
+    const subqueryCuartos = this.cuartoRepository
+      .createQueryBuilder('c')
+      .select('c.id_cuarto')
+      .where('c.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    const subqueryCamas = this.camaRepository
+      .createQueryBuilder('cm')
+      .select('cm.id_cama')
+      .innerJoin('cm.cuarto', 'cuarto_cm')
+      .where('cuarto_cm.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+
+    // 3. Query principal de rentas con todos los datos necesarios
+    const query = this.rentaRepository
+      .createQueryBuilder('renta')
+      // Cliente que renta
+      .leftJoinAndSelect('renta.user', 'cliente')
+      // Pagos
+      .leftJoinAndSelect('renta.pagos', 'pago')
+      // Ubicación alojamiento completo
+      .leftJoinAndSelect('renta.alojamiento', 'alojamiento')
+      // Ubicación cuarto
+      .leftJoinAndSelect('renta.cuarto', 'cuarto')
+      .leftJoinAndSelect('cuarto.alojamiento', 'alojamiento_cuarto')
+      // Ubicación cama
+      .leftJoinAndSelect('renta.cama', 'cama')
+      .leftJoinAndSelect('cama.cuarto', 'cuarto_cama')
+      .leftJoinAndSelect('cuarto_cama.alojamiento', 'alojamiento_cama')
+      // Servicios contratados
+      .leftJoinAndSelect('renta.rentaServicios', 'rs')
+      .leftJoinAndSelect('rs.servicio', 'servicio')
+      .where('renta.empresa = :idEmpresa', { idEmpresa: user.id_empresa })
+      .andWhere(
+        `(
+        renta.id_alojamiento IN (:...idsAloj)
+        OR renta.id_cuarto   IN (${subqueryCuartos.getQuery()})
+        OR renta.id_cama     IN (${subqueryCamas.getQuery()})
+      )`,
+        {
+          idsAloj: idsAlojamientos,
+          ...subqueryCuartos.getParameters(),
+          ...subqueryCamas.getParameters(),
+        },
+      );
+
+    // 4. Filtros opcionales
+    if (filtros?.estadoRenta) {
+      query.andWhere('renta.estado = :estadoRenta', {
+        estadoRenta: filtros.estadoRenta,
+      });
+    }
+    if (filtros?.tipo_renta) {
+      query.andWhere('renta.tipo_renta = :tipoRenta', {
+        tipoRenta: filtros.tipo_renta,
+      });
+    }
+    if (filtros?.fechaDesde) {
+      query.andWhere('renta.fecha_entrada >= :desde', {
+        desde: filtros.fechaDesde,
+      });
+    }
+    if (filtros?.fechaHasta) {
+      query.andWhere('renta.fecha_salida <= :hasta', {
+        hasta: filtros.fechaHasta,
+      });
+    }
+    if (filtros?.estadoPago) {
+      query.andWhere('pago.estado = :estadoPago', {
+        estadoPago: filtros.estadoPago,
+      });
+    }
+
+    query.orderBy('renta.fecha_entrada', 'DESC');
+
+    const rentas = await query.getMany();
+
+    // 5. Calcular días restantes o días vencidos
+    const hoy = new Date();
+
+    const calcularDiasRestantes = (fechaSalida: Date): number => {
+      const diff = new Date(fechaSalida).getTime() - hoy.getTime();
+      return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    };
+
+    const calcularEstadoVencimiento = (
+      renta: Renta,
+    ): {
+      dias_restantes: number | null;
+      dias_vencida: number | null;
+      vence_pronto: boolean; // true si vence en los próximos 7 días
+      texto_estado: string;
+    } => {
+      if (renta.estado !== EstadoRenta.ACTIVA) {
+        return {
+          dias_restantes: null,
+          dias_vencida: null,
+          vence_pronto: false,
+          texto_estado: `Renta ${renta.estado.toLowerCase()}`,
+        };
+      }
+
+      const dias = calcularDiasRestantes(renta.fecha_salida);
+
+      if (dias < 0) {
+        return {
+          dias_restantes: null,
+          dias_vencida: Math.abs(dias),
+          vence_pronto: false,
+          texto_estado: `Vencida hace ${Math.abs(dias)} día(s)`,
+        };
+      }
+
+      return {
+        dias_restantes: dias,
+        dias_vencida: null,
+        vence_pronto: dias <= 7,
+        texto_estado:
+          dias === 0
+            ? 'Vence hoy'
+            : dias <= 7
+              ? `⚠️ Vence en ${dias} día(s)`
+              : `Vence en ${dias} día(s)`,
+      };
+    };
+
+    // 6. Resolver ubicación legible según tipo
+    const resolverUbicacion = (renta: Renta) => {
+      switch (renta.tipo_renta) {
+        case TipoRenta.ALOJAMIENTO_COMPLETO:
+          return {
+            tipo: 'Alojamiento completo',
+            nombre: renta.alojamiento?.name ?? null,
+            direccion: renta.alojamiento?.address ?? null,
+            detalle: null,
+          };
+
+        case TipoRenta.CUARTO:
+          return {
+            tipo: 'Cuarto',
+            nombre: renta.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cuarto?.name ?? 'N/A'}`,
+          };
+
+        case TipoRenta.CAMA:
+          return {
+            tipo: 'Cama',
+            nombre: renta.cama?.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cama?.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cama?.cuarto?.name ?? 'N/A'} | Cama: ${renta.cama?.name ?? 'N/A'}`,
+          };
+      }
+    };
+
+    // 7. Mapear cada renta con su detalle completo
+    const detalleRentas = rentas.map((renta) => {
+      const pagoCompletado = renta.pagos?.find(
+        (p) => p.estado === EstadoPago.COMPLETADO,
+      );
+      const pagoPendiente = renta.pagos?.find(
+        (p) => p.estado === EstadoPago.PENDIENTE,
+      );
+
+      const servicios = (renta.rentaServicios ?? []).map((rs) => ({
+        nombre: rs.servicio?.name ?? 'N/A',
+        precio: Number(rs.precio ?? 0),
+      }));
+
+      const totalServicios = servicios.reduce((acc, s) => acc + s.precio, 0);
+      const subtotalAlojamiento =
+        Number(renta.precio_mensual) * renta.meses_pagados;
+      const vencimiento = calcularEstadoVencimiento(renta);
+
+      return {
+        // —— Identificadores ——
+        id_renta: renta.id_renta,
+        estado_renta: renta.estado,
+        tipo_renta: renta.tipo_renta,
+
+        // —— Cliente (inquilino) ——
+        cliente: {
+          id_usuario: renta.user?.id ?? renta.id_usuario,
+          nombre: renta.user
+            ? `${renta.user.name ?? ''} ${renta.user.firstName ?? ''}`.trim()
+            : 'N/A',
+          email: renta.userEmail ?? renta.user?.email ?? 'N/A',
+          telefono: renta.user?.phone ?? null, // ajusta al campo real de tu User
+        },
+
+        // —— Ubicación ——
+        ubicacion: resolverUbicacion(renta),
+
+        // —— Fechas ——
+        fechas: {
+          entrada: renta.fecha_entrada,
+          salida: renta.fecha_salida,
+          meses_contratados: renta.meses_pagados,
+          registrada_el: renta.created_at,
+          ...vencimiento,
+        },
+
+        // —— Financiero ——
+        financiero: {
+          precio_mensual: Number(renta.precio_mensual),
+          subtotal_alojamiento: subtotalAlojamiento,
+          servicios_adicionales: servicios,
+          total_servicios: totalServicios,
+          monto_total: Number(renta.monto_total),
+
+          pago_completado: pagoCompletado
+            ? {
+                id_pago: pagoCompletado.id,
+                monto: Number(pagoCompletado.monto),
+                metodo: pagoCompletado.metodo_pago ?? 'stripe',
+                fecha_pago: pagoCompletado.fecha_pago,
+                transaccion_id: pagoCompletado.transaccion_id ?? null,
+                stripe_id: pagoCompletado.stripe_payment_intent_id ?? null,
+              }
+            : null,
+
+          pago_pendiente: pagoPendiente
+            ? {
+                id_pago: pagoPendiente.id,
+                monto: Number(pagoPendiente.monto),
+                stripe_id: pagoPendiente.stripe_payment_intent_id ?? null,
+              }
+            : null,
+        },
+      };
+    });
+
+    // 8. Resumen financiero global
+    const rentasActivas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.ACTIVA,
+    );
+    const rentasFinalizadas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.FINALIZADA,
+    );
+    const rentasCanceladas = detalleRentas.filter(
+      (r) => r.estado_renta === EstadoRenta.CANCELADA,
+    );
+    const proximasAVencer = rentasActivas.filter((r) => r.fechas.vence_pronto);
+
+    const ingresosTotales = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + Number(r.financiero.monto_total), 0);
+
+    const ingresosSoloAlojamiento = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + r.financiero.subtotal_alojamiento, 0);
+
+    const ingresosSoloServicios = detalleRentas
+      .filter((r) => r.financiero.pago_completado)
+      .reduce((acc, r) => acc + r.financiero.total_servicios, 0);
+
+    const montosPendientes = detalleRentas
+      .filter((r) => r.financiero.pago_pendiente)
+      .reduce(
+        (acc, r) => acc + Number(r.financiero.pago_pendiente?.monto ?? 0),
+        0,
+      );
+
+    return {
+      // —— Encabezado ——
+      id_propietario,
+      fecha_reporte: hoy,
+      alojamientos_gestionados: alojamientos.map((a) => ({
+        id: a.id_alojamiento,
+        nombre: a.name,
+        direccion: a.address,
+      })),
+
+      // —— Resumen ejecutivo ——
+      resumen: {
+        total_rentas: detalleRentas.length,
+        activas: rentasActivas.length,
+        finalizadas: rentasFinalizadas.length,
+        canceladas: rentasCanceladas.length,
+        proximas_a_vencer: proximasAVencer.length, // vencen en ≤ 7 días
+
+        ingresos_totales_cobrados: ingresosTotales,
+        ingresos_alojamiento: ingresosSoloAlojamiento,
+        ingresos_servicios_adicionales: ingresosSoloServicios,
+        montos_pendientes_por_cobrar: montosPendientes,
+      },
+
+      // —— Alertas ——
+      alertas: {
+        rentas_proximas_a_vencer: proximasAVencer.map((r) => ({
+          id_renta: r.id_renta,
+          cliente: r.cliente.nombre,
+          email: r.cliente.email,
+          ubicacion: `${r.ubicacion.nombre} - ${r.ubicacion.detalle ?? r.ubicacion.tipo}`,
+          fecha_salida: r.fechas.salida,
+          dias_restantes: r.fechas.dias_restantes,
+        })),
+      },
+
+      // —— Detalle completo ——
+      rentas: detalleRentas,
+    };
+  }
+
+  //saber cuantas rentas ya hubo por meses tiene un campo de created_at y los que estan en estado ACTIVA
+  async getCountRentasByMonth(user: UserActiveInterface) {
+    const query = `
+    SELECT
+      m.month,
+      e.estado,
+      COALESCE(COUNT(r.id_renta), 0) as total
+    FROM generate_series(1, 12) AS m(month)
+    CROSS JOIN (
+      SELECT unnest(ARRAY['PENDIENTE','ACTIVA','FINALIZADA','CANCELADA']) AS estado
+    ) e
+    LEFT JOIN rentas r
+      ON EXTRACT(MONTH FROM r.created_at) = m.month
+      AND r.estado = e.estado::rentas_estado_enum -- 👈 🔥 CAST AQUÍ
+    GROUP BY m.month, e.estado
+    ORDER BY m.month, e.estado
+  `;
+
+    const result = await this.rentaRepository.query(query);
+
+    const meses = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    return meses.map((mes, index) => {
+      const monthNumber = index + 1;
+
+      const estados = result
+        .filter((r) => Number(r.month) === monthNumber)
+        .reduce((acc, item) => {
+          acc[item.estado] = Number(item.total);
+          return acc;
+        }, {});
+
+      return {
+        month: mes,
+        ...estados,
+      };
+    });
   }
 }

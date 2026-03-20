@@ -26,6 +26,12 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 export class DocumentacionController {
   constructor(private readonly documentacionService: DocumentacionService) {}
 
+  @Get('last-seven-files')
+  @Auth(Role.ADMIN)
+  getLast7Documentations(@ActiveUser() user: UserActiveInterface) {
+    return this.documentacionService.getLast7Documentations(user);
+  }
+
   @Post('upload')
   @Auth(Role.ESTUDIANTE)
   @UseInterceptors(FileInterceptor('file'))

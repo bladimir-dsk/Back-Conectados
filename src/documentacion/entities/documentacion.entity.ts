@@ -54,4 +54,7 @@ export class Documentacion {
   @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userEmail', referencedColumnName: 'email' })
   user: User;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 }

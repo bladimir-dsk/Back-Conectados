@@ -42,6 +42,18 @@ export class PropietariosController {
     return this.propietariosService.findAll(user, paginacion);
   }
 
+  @Get('me')
+  @Auth([Role.PROPIETARIO])
+  getMyData(@ActiveUser() user: UserActiveInterface) {
+    return this.propietariosService.getMyData(user);
+  }
+
+  @Get('count')
+  @Auth([Role.ADMIN])
+  count(@ActiveUser() user: UserActiveInterface) {
+    return this.propietariosService.countPropietarios(user);
+  }
+
   @Get(':id')
   @Auth([Role.ADMIN])
   findOne(@Param('id') id: number, @ActiveUser() user: UserActiveInterface) {

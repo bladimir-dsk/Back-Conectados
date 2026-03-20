@@ -44,7 +44,7 @@ export class AuthService {
       phone,
       firstName,
       middleName,
-      empresa: null, // La empresa se asignará después de crear el pago
+      id_empresa: 1, // La empresa se asignará después de crear el pago
     };
 
     const newUser = await this.usersService.create(userData);

@@ -264,7 +264,7 @@ export class DocumentacionService {
     const requiredDocuments = [
       TypeDocuments.INE_DELANTERA,
       TypeDocuments.INE_TRASERA,
-      TypeDocuments.PASAPORTE,
+      // TypeDocuments.PASAPORTE,
       TypeDocuments.CFE,
     ];
 
@@ -321,6 +321,19 @@ export class DocumentacionService {
     return {
       approved: true,
       message: 'Todos los documentos han sido aprobados',
+    };
+  }
+
+  //api para que me traiga las 7 ultimas solicitudes de documentacion
+  async getLast7Documentations(user: UserActiveInterface) {
+    const documents = await this.documentacionRepository.find({
+      take: 7,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+    return {
+      documents,
     };
   }
 }

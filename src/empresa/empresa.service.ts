@@ -22,7 +22,7 @@ export class EmpresaService {
     });
   }
   async updateEmpresa(
-    id: number,
+    // id: number,
     updateEmpresaDto: UpdateEmpresaDto,
     user: UserActiveInterface,
   ) {
@@ -35,18 +35,18 @@ export class EmpresaService {
       throw new BadRequestException('Usuario no encontrado');
     }
     const empresa = await this.empresaRepository.findOne({
-      where: { id_empresa: id },
+      where: { id_empresa: user.id_empresa },
     });
 
     if (!empresa) {
       throw new BadRequestException('Empresa no encontrada');
     }
-    await this.empresaRepository.update(id, {
+    await this.empresaRepository.update(empresa.id_empresa, {
       ...updateEmpresaDto,
       id_empresa: user.id_empresa,
     });
     return this.empresaRepository.findOne({
-      where: { id_empresa: id },
+      where: { id_empresa: empresa.id_empresa },
     });
   }
 }

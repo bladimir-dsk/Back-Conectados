@@ -1,9 +1,13 @@
-import { Injectable, NotAcceptableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotAcceptableException,
+} from '@nestjs/common';
 import { CreateAlojamientoDto } from './dto/create-alojamiento.dto';
 import { UpdateAlojamientoDto } from './dto/update-alojamiento.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Alojamiento } from './entities/alojamiento.entity';
-import { Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { Servicio } from 'src/servicios/entities/servicio.entity';
 import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { PlanVigencia } from 'src/plan-vigencia/entities/plan-vigencia.entity';
@@ -12,6 +16,7 @@ import { Role } from 'src/common/enums/rol.enum';
 import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
+import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 
 @Injectable()
 export class AlojamientoService {
@@ -41,30 +46,42 @@ export class AlojamientoService {
         id_empresa: user.id_empresa,
       },
     });
+
     if (!empresa) {
       throw new NotAcceptableException('Empresa no encontrada');
     }
 
-    // const planVigencia = await this.planVigenciaRepository.findOne({
-    //   where: {
-    //     id_PlanVigencia: createAlojamientoDto.id_PlanVigencia,
-    //     empresa: {
-    //       id_empresa: user.id_empresa,
-    //     },
-    //   },
-    // });
-    // if (!planVigencia) {
-    //   throw new NotAcceptableException('Plan vigencia no encontrado');
-    // }
+    let propietario: Propietario;
 
-    const propietario = await this.propietarioRepository.findOne({
-      where: {
-        id_propietario: createAlojamientoDto.id_Propietario,
-        empresa: {
-          id_empresa: user.id_empresa,
+    // 🔹 Si es ADMIN debe enviar id_propietario
+    if (user.role === Role.ADMIN) {
+      if (!createAlojamientoDto.id_Propietario) {
+        throw new BadRequestException(
+          'El id_propietario es obligatorio para el administrador',
+        );
+      }
+
+      propietario = await this.propietarioRepository.findOne({
+        where: {
+          id_propietario: createAlojamientoDto.id_Propietario,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
         },
-      },
-    });
+      });
+    }
+    // 🔹 Si es PROPIETARIO se toma automáticamente
+    else if (user.role === Role.PROPIETARIO) {
+      propietario = await this.propietarioRepository.findOne({
+        where: {
+          email: user.email,
+          empresa: {
+            id_empresa: user.id_empresa,
+          },
+        },
+      });
+    }
+
     if (!propietario) {
       throw new NotAcceptableException('Propietario no encontrado');
     }
@@ -77,6 +94,7 @@ export class AlojamientoService {
         },
       },
     });
+
     if (existingAlojamiento) {
       throw new NotAcceptableException('Alojamiento ya existe');
     }
@@ -84,10 +102,10 @@ export class AlojamientoService {
     const alojamiento = this.alojamientoRepository.create({
       ...createAlojamientoDto,
       empresa,
-      // planVigencia,
       propietario,
       userEmail: user.email,
     });
+
     return this.alojamientoRepository.save(alojamiento);
   }
 
@@ -99,10 +117,10 @@ export class AlojamientoService {
       priceMin?: number;
       priceMax?: number;
       typeProperty?: string;
-      gender?: string;
-      typeIncome?: string;
+      gender?: string[]; // 👈 ahora es array
+      typeIncome?: string[];
       city?: string;
-      estatus?: string;
+      estatus?: string[];
       capacity?: number;
     },
     user: UserActiveInterface,
@@ -127,8 +145,12 @@ export class AlojamientoService {
     }
 
     if (query.name) {
-      qb.andWhere('LOWER(a.name) LIKE LOWER(:name)', {
-        name: `%${query.name}%`,
+      const words = query.name.toLowerCase().trim().split(/\s+/);
+
+      words.forEach((word, index) => {
+        qb.andWhere(`LOWER(a.name) LIKE :word${index}`, {
+          [`word${index}`]: `%${word}%`,
+        });
       });
     }
     if (query.priceMin !== undefined) {
@@ -148,29 +170,37 @@ export class AlojamientoService {
         typeProperty: query.typeProperty,
       });
     }
-
-    if (query.gender) {
-      qb.andWhere('a.gender = :gender', {
-        gender: query.gender,
-      });
+    if (query.gender && query.gender.length > 0) {
+      query.gender.length === 1
+        ? qb.andWhere('a.gender = :gender', { gender: query.gender[0] })
+        : qb.andWhere('a.gender IN (:...genders)', { genders: query.gender });
     }
 
-    if (query.typeIncome) {
-      qb.andWhere('a.typeIncome = :typeIncome', {
-        typeIncome: query.typeIncome,
-      });
+    if (query.typeIncome && query.typeIncome.length > 0) {
+      query.typeIncome.length === 1
+        ? qb.andWhere('a.typeIncome = :typeIncome', {
+            typeIncome: query.typeIncome[0],
+          })
+        : qb.andWhere('a.typeIncome IN (:...typeIncomes)', {
+            typeIncomes: query.typeIncome,
+          });
     }
-
     if (query.city) {
-      qb.andWhere('LOWER(a.city) LIKE LOWER(:city)', {
-        city: `%${query.city}%`,
+      const words = query.city.toLowerCase().trim().split(/\s+/);
+
+      words.forEach((word, index) => {
+        qb.andWhere(`LOWER(a.city) LIKE :word${index}`, {
+          [`word${index}`]: `%${word}%`,
+        });
       });
     }
 
-    if (query.estatus) {
-      qb.andWhere('a.estatus = :estatus', {
-        estatus: query.estatus,
-      });
+    if (query.estatus && query.estatus.length > 0) {
+      query.estatus.length === 1
+        ? qb.andWhere('a.estatus = :estatus', { estatus: query.estatus[0] })
+        : qb.andWhere('a.estatus IN (:...estatuses)', {
+            estatuses: query.estatus,
+          });
     }
 
     if (query.capacity) {
@@ -283,20 +313,14 @@ export class AlojamientoService {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
 
-    // if (updateAlojamientoDto.id_PlanVigencia) {
-    //   const planVigencia = await this.planVigenciaRepository.findOne({
-    //     where: {
-    //       id_PlanVigencia: updateAlojamientoDto.id_PlanVigencia,
-    //       empresa: {
-    //         id_empresa: user.id_empresa,
-    //       },
-    //     },
-    //   });
-    //   if (!planVigencia) {
-    //     throw new NotAcceptableException('Plan vigencia no encontrado');
-    //   }
-    //   alojamiento.planVigencia = planVigencia;
-    // }
+    //validar si el alojamiento esta en ocupado no se pueda cambiar el tipo
+    if (alojamiento.estatus === EstadoAlojamiento.OCUPADO) {
+      if (updateAlojamientoDto.typeIncome) {
+        throw new NotAcceptableException(
+          'No se puede cambiar el tipo de alojamiento cuando esta ocupado',
+        );
+      }
+    }
 
     if (updateAlojamientoDto.id_Propietario) {
       if (user.role !== Role.ADMIN) {
@@ -499,9 +523,9 @@ export class AlojamientoService {
       name?: string;
       priceMin?: number;
       priceMax?: number;
-      typeProperty?: string;
-      gender?: string;
-      typeIncome?: string;
+      typeProperty?: string[];
+      gender?: string[];
+      typeIncome?: string[];
       city?: string;
       capacity?: number;
     },
@@ -559,20 +583,20 @@ export class AlojamientoService {
       });
     }
 
-    if (query.typeProperty) {
-      qb.andWhere('a.typeProperty = :typeProperty', {
+    if (query.typeProperty && query.typeProperty.length > 0) {
+      qb.andWhere('a.typeProperty IN (:...typeProperty)', {
         typeProperty: query.typeProperty,
       });
     }
 
-    if (query.gender) {
-      qb.andWhere('a.gender = :gender', {
+    if (query.gender && query.gender.length > 0) {
+      qb.andWhere('a.gender IN (:...gender)', {
         gender: query.gender,
       });
     }
 
-    if (query.typeIncome) {
-      qb.andWhere('a.typeIncome = :typeIncome', {
+    if (query.typeIncome && query.typeIncome.length > 0) {
+      qb.andWhere('a.typeIncome IN (:...typeIncome)', {
         typeIncome: query.typeIncome,
       });
     }
@@ -605,6 +629,83 @@ export class AlojamientoService {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
       },
+    };
+  }
+
+  //contar alojamientos
+  async countAlojamientos(user: UserActiveInterface) {
+    const now = new Date();
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
+
+    // 🔹 condiciones base
+    const whereBase: any = {};
+
+    if (user.role !== Role.ADMIN) {
+      whereBase.propietario = {
+        email: user.email,
+      };
+    }
+
+    // 🔹 total general
+    const total = await this.alojamientoRepository.count({
+      where: whereBase,
+    });
+
+    // 🔹 total del mes actual
+    const totalMes = await this.alojamientoRepository.count({
+      where: {
+        ...whereBase,
+        CreatedAt: Between(startOfMonth, endOfMonth),
+      },
+    });
+
+    return {
+      total,
+      nuevosdelmes: {
+        total: totalMes,
+      },
+    };
+  }
+  //contar alojamientos pero dividido por sus estados estadoAlojamiento.enum
+  async findAlojamientosByEstatus(user: UserActiveInterface) {
+    const qb = this.alojamientoRepository
+      .createQueryBuilder('alojamiento')
+      .leftJoin('alojamiento.propietario', 'propietario') // 👈 JOIN clave
+      .select('alojamiento.estatus', 'estatus')
+      .addSelect('COUNT(alojamiento.id_alojamiento)', 'total')
+      .where('alojamiento.estatus IN (:...estatus)', {
+        estatus: Object.values(EstadoAlojamiento),
+      });
+
+    // 🔐 filtro por rol
+    if (user.role !== Role.ADMIN) {
+      qb.andWhere('propietario.email = :email', {
+        email: user.email,
+      });
+    }
+
+    const result = await qb.groupBy('alojamiento.estatus').getRawMany();
+
+    const anidado = result.map((item) => ({
+      estatus: item.estatus,
+      total: Number(item.total),
+    }));
+
+    return {
+      ...anidado,
+      totalGeneralAlojamientos: result.reduce(
+        (acc, item) => acc + Number(item.total),
+        0,
+      ),
     };
   }
 }
