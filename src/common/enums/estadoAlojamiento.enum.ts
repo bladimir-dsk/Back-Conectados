@@ -4,4 +4,5 @@ export enum EstadoAlojamiento {
   OCUPADO = 'OCUPADO',
   MANTENIMIENTO = 'MANTENIMIENTO',
   PENDIENTE = 'PENDIENTE',
+  LIMPIEZA = 'LIMPIEZA',
 }

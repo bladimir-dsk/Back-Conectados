@@ -525,6 +525,34 @@ export class RentaService {
       };
     }
 
+    const camasMantenimiento = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.MANTENIMIENTO,
+      },
+    });
+
+    if (camasMantenimiento > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasMantenimiento} cama(s) que le pertenecen están en mantenimiento`,
+      };
+    }
+
+    const camasLimpieza = await this.camaRepository.count({
+      where: {
+        id_cuarto: idCuarto,
+        estatus: EstadoAlojamiento.LIMPIEZA,
+      },
+    });
+
+    if (camasLimpieza > 0) {
+      return {
+        disponible: false,
+        mensaje: `No se puede rentar el cuarto completo porque ${camasLimpieza} cama(s) que le pertenecen están en limpieza`,
+      };
+    }
+
     // Validar que no haya rentas ACTIVAS en camas individuales de este cuarto en esas fechas
     const rentasCamasActivas = await this.rentaRepository
       .createQueryBuilder('renta')
@@ -767,8 +795,11 @@ export class RentaService {
   }
 
   // Tarea programada para liberar alojamientos cuando expire la renta
-  @Cron('0 0 * * *') // Ejecutar diariamente a medianoche
+  @Cron('0 0 * * *')
   async verificarRentasExpiradas() {
+    await this.procesarRentasExpiradas();
+  }
+  async procesarRentasExpiradas() {
     const hoy = new Date();
 
     const rentasExpiradas = await this.rentaRepository.find({
@@ -776,11 +807,11 @@ export class RentaService {
         estado: EstadoRenta.ACTIVA,
         fecha_salida: LessThan(hoy),
       },
-      relations: ['alojamiento', 'cuarto', 'cama'],
     });
 
     const queryRunner =
       this.rentaRepository.manager.connection.createQueryRunner();
+
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -788,20 +819,20 @@ export class RentaService {
       for (const renta of rentasExpiradas) {
         renta.estado = EstadoRenta.FINALIZADA;
         await queryRunner.manager.save(renta);
+
         await this.actualizarEstadoRecursoCascada(
           queryRunner,
           renta.tipo_renta,
           renta.id_alojamiento,
           renta.id_cuarto,
           renta.id_cama,
-          EstadoAlojamiento.ACTIVO,
+          EstadoAlojamiento.LIMPIEZA,
         );
       }
 
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error('Error al verificar rentas expiradas:', error);
       throw error;
     } finally {
       await queryRunner.release();
@@ -809,6 +840,8 @@ export class RentaService {
   }
 
   async findRentasUser(user: UserActiveInterface, estado?: EstadoRenta) {
+    // 👇 Ejecutas la lógica antes de consultar
+    await this.procesarRentasExpiradas();
     const rentas = await this.rentaRepository.find({
       where: {
         ...(estado ? { estado } : {}), // si no viene estado, trae todas
