@@ -77,28 +77,33 @@ export class RentaController {
   // @ApiQuery({ name: 'tipo_renta', required: false, type: String })
   // ✅ Después — lee de query y parsea a número explícitamente
   @Get('control-financiero')
-  @Auth([Role.PROPIETARIO])
-  @ApiQuery({ name: 'id', required: true, type: Number })
+  @Auth([Role.PROPIETARIO, Role.ADMIN])
+  @ApiQuery({ name: 'id', required: false, type: Number })
   @ApiQuery({ name: 'fechaDesde', required: false, type: String })
   @ApiQuery({ name: 'fechaHasta', required: false, type: String })
   @ApiQuery({ name: 'estado', required: false, type: String })
   @ApiQuery({ name: 'estadoPago', required: false, type: String })
   @ApiQuery({ name: 'tipo_renta', required: false, type: String })
   async reporteControlFinanciero(
-    @Query('id') id: number, // ← llega como string desde la URL
-    @ActiveUser() user: UserActiveInterface,
+    @Query('id') id?: string, // 👈 string | undefined
+    @ActiveUser() user?: UserActiveInterface,
     @Query('fechaDesde') fechaDesde?: string,
     @Query('fechaHasta') fechaHasta?: string,
     @Query('estado') estado?: EstadoRenta,
     @Query('estadoPago') estadoPago?: EstadoPago,
     @Query('tipo_renta') tipo_renta?: TipoRenta,
   ) {
-    const idPropietario = id;
+    // Si viene id, lo parseamos y validamos; si no viene, queda undefined
+    let idPropietario: number | undefined;
 
-    if (isNaN(idPropietario)) {
-      throw new BadRequestException(
-        'El parámetro id debe ser un número válido',
-      );
+    if (id !== undefined) {
+      // 👈 solo valida si realmente viene
+      idPropietario = Number(id);
+      if (isNaN(idPropietario)) {
+        throw new BadRequestException(
+          'El parámetro id debe ser un número válido',
+        );
+      }
     }
 
     return this.rentaService.reporteControlFinanciero(idPropietario, user, {

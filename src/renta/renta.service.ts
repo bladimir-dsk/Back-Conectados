@@ -1238,7 +1238,7 @@ export class RentaService {
   }
 
   async reporteControlFinanciero(
-    id_propietario: number,
+    id_propietario: number | undefined, // 👈 opcional
     user: UserActiveInterface,
     filtros?: {
       fechaDesde?: Date;
@@ -1248,18 +1248,26 @@ export class RentaService {
       tipo_renta?: TipoRenta;
     },
   ) {
-    // 1. Obtener alojamientos del propietario
+    // 1. Obtener alojamientos — si no hay propietario, trae todos los de la empresa
+    const whereAlojamiento: any = {
+      empresa: { id_empresa: user.id_empresa },
+    };
+
+    if (id_propietario) {
+      // 👈 solo filtra si viene el id
+      whereAlojamiento.propietario = { id_propietario };
+    }
+
     const alojamientos = await this.alojamientoRepository.find({
-      where: {
-        propietario: { id_propietario },
-        empresa: { id_empresa: user.id_empresa },
-      },
+      where: whereAlojamiento,
       select: ['id_alojamiento', 'name', 'address'],
     });
 
     if (!alojamientos.length) {
       throw new NotFoundException(
-        'No se encontraron alojamientos para este propietario',
+        id_propietario
+          ? 'No se encontraron alojamientos para este propietario'
+          : 'No se encontraron alojamientos para esta empresa', // 👈 mensaje contextual
       );
     }
 
