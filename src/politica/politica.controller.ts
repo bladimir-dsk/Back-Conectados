@@ -32,9 +32,8 @@ export class PoliticaController {
   }
 
   @Get()
-  @Auth([Role.ADMIN, Role.PROPIETARIO, Role.ESTUDIANTE])
-  findAll(@ActiveUser() user: UserActiveInterface) {
-    return this.politicaService.findAll(user);
+  findAll() {
+    return this.politicaService.findAll();
   }
 
   @Get(':id')

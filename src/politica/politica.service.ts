@@ -46,10 +46,8 @@ export class PoliticaService {
     return this.politicaRepository.save(politica);
   }
 
-  async findAll(user: UserActiveInterface) {
-    return this.politicaRepository.find({
-      where: { empresa: { id_empresa: user.id_empresa } },
-    });
+  async findAll() {
+    return this.politicaRepository.find();
   }
 
   async findOne(id: number, user: UserActiveInterface) {
