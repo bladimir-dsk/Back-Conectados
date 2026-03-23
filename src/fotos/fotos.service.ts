@@ -7,6 +7,7 @@ import { Empresa } from 'src/empresa/entities/empresa.entity';
 import { Alojamiento } from 'src/alojamiento/entities/alojamiento.entity';
 import { Repository } from 'typeorm';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
+import { v4 as uuid } from 'uuid';
 
 @Injectable()
 export class FotosService {
@@ -46,7 +47,10 @@ export class FotosService {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
-      const filePacth = `alojamientos/${id_alojamiento}/imagenes/${Date.now()}-${file.originalname}`;
+      const extension = file.originalname.split('.').pop(); // jpg, png, etc.
+      const fileName = `${uuid()}.${extension}`;
+
+      const filePacth = `alojamientos/${id_alojamiento}/imagenes/${fileName}`;
 
       const { error } = await this.supabase.storage
         .from(process.env.SUPABASE_BUCKET)
@@ -128,7 +132,10 @@ export class FotosService {
         }
       }
 
-      const newPath = `alojamientos/${foto.alojamiento.id_alojamiento}/imagenes/${Date.now()}-${file.originalname}`;
+      const extension = file.originalname.split('.').pop();
+      const fileName = `${uuid()}.${extension}`;
+
+      const newPath = `alojamientos/${foto.alojamiento.id_alojamiento}/imagenes/${fileName}`;
 
       const { error } = await this.supabase.storage
         .from(process.env.SUPABASE_BUCKET)
