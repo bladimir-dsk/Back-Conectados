@@ -27,6 +27,7 @@ import { CalificacionModule } from './calificacion/calificacion.module';
 import { RentaServicioModule } from './renta-servicio/renta-servicio.module';
 import { StudentInformationModule } from './student-information/student-information.module';
 import { StripeModule } from './stripe/stripe.module';
+import { FavoritoModule } from './favorito/favorito.module';
 
 dotenv.config();
 
@@ -79,6 +80,7 @@ dotenv.config();
     RentaServicioModule,
     StudentInformationModule,
     StripeModule,
+    FavoritoModule,
   ],
   controllers: [],
   providers: [],
