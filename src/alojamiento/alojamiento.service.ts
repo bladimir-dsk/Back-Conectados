@@ -17,6 +17,7 @@ import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
+import { Favorito } from 'src/favorito/entities/favorito.entity';
 
 @Injectable()
 export class AlojamientoService {
@@ -35,6 +36,8 @@ export class AlojamientoService {
     private readonly alojamientoServicioRepository: Repository<AlojamientoServicio>,
     @InjectRepository(Calificacion)
     private readonly calificacionRepository: Repository<Calificacion>,
+    @InjectRepository(Favorito)
+    private readonly favoritoRepository: Repository<Favorito>,
   ) {}
 
   async create(
@@ -215,6 +218,20 @@ export class AlojamientoService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    // ✅ NUEVO: traer los ids de favoritos del usuario de una sola query
+    const favoritosDelUsuario = user.id
+      ? await this.favoritoRepository.find({
+          where: { user: { id: user.id } },
+          select: ['id_favorito', 'alojamiento'],
+          relations: ['alojamiento'],
+        })
+      : [];
+
+    const favoritosIds = new Set(
+      favoritosDelUsuario.map((f) => f.alojamiento?.id_alojamiento),
+    );
+
+    // ✅ NUEVO: mapear con isFavorito + calificacion promedio
     const dataWithRating = data.map((alojamiento) => {
       const promedio =
         alojamiento.calificacion && alojamiento.calificacion.length > 0
@@ -227,6 +244,7 @@ export class AlojamientoService {
       return {
         ...alojamiento,
         calificacion: promedio,
+        isFavorito: favoritosIds.has(alojamiento.id_alojamiento), // ← 🔑
       };
     });
 
