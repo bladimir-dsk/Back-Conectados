@@ -102,19 +102,23 @@ export class DocumentacionService {
     return this.upload(file, { email: user.email }, createDocumentacionDto);
   }
 
-  async findAll(userPayload: any) {
-    if (!userPayload) {
-      throw new BadRequestException('Usuario no autenticado');
-    }
-    if (userPayload.role === Role.ADMIN) {
-      return this.documentacionRepository.find({
-        relations: ['user', 'empresa'],
-      });
-    }
-    return this.documentacionRepository.find({
-      where: { userEmail: userPayload.email },
+  async findAll(user: UserActiveInterface, page?: number, limit?: number) {
+    const queryOptions: any = {
       relations: ['user', 'empresa'],
-    });
+    };
+
+    // Lógica de roles
+    if (user.role !== Role.ADMIN) {
+      queryOptions.where = { userEmail: user.email };
+    }
+
+    // Paginación opcional
+    if (page && limit) {
+      queryOptions.skip = (page - 1) * limit;
+      queryOptions.take = limit;
+    }
+
+    return this.documentacionRepository.find(queryOptions);
   }
 
   async findOne(id: number, user: any) {
@@ -128,6 +132,68 @@ export class DocumentacionService {
       throw new NotFoundException('permiso no autorizado');
     }
     return documentacion;
+  }
+
+  async findAllGroupedByUser(
+    user: UserActiveInterface,
+    page?: number,
+    limit?: number,
+    name?: string,
+  ) {
+    const query = this.documentacionRepository
+      .createQueryBuilder('doc')
+      .leftJoinAndSelect('doc.user', 'user')
+      .leftJoinAndSelect('doc.empresa', 'empresa');
+
+    // 🔐 Filtro por rol
+    if (user.role !== Role.ADMIN) {
+      query.where('doc.userEmail = :email', { email: user.email });
+    }
+
+    // 🔍 Filtro por nombre (LIKE)
+    if (name) {
+      query.andWhere('LOWER(user.name) LIKE LOWER(:name)', {
+        name: `%${name}%`,
+      });
+    }
+
+    const documents = await query.getMany();
+
+    // 🧠 Agrupar por usuario
+    const grouped = Object.values(
+      documents.reduce((acc, doc) => {
+        const email = doc.userEmail;
+
+        if (!acc[email]) {
+          acc[email] = {
+            user: doc.user,
+            empresa: doc.empresa,
+            documentos: [],
+          };
+        }
+
+        acc[email].documentos.push(doc);
+        return acc;
+      }, {}),
+    );
+
+    // 📄 Paginación por usuario
+    if (page && limit) {
+      const start = (page - 1) * limit;
+      const end = start + limit;
+
+      return {
+        data: grouped.slice(start, end),
+        total: grouped.length,
+        page,
+        limit,
+      };
+    }
+
+    return {
+      data: grouped,
+      total: grouped.length,
+    };
   }
 
   async update(
