@@ -141,9 +141,11 @@ export class RentaService {
         );
       }
 
-      totalServicios = serviciosEncontrados.reduce((acc, s) => {
+      const totalServiciosBase = serviciosEncontrados.reduce((acc, s) => {
         return acc + Number(s.costo || 0);
       }, 0);
+
+      totalServicios = totalServiciosBase * rentaData.meses_a_pagar;
     }
 
     const montoTotal = subtotalBase + totalServicios;
@@ -179,7 +181,7 @@ export class RentaService {
         const rentaServicio = this.rentaServicioRepository.create({
           id_renta: rentaGuardada.id_renta,
           id_servicio: servicio.servicio.id_servicio,
-          precio: servicio.costo,
+          precio: servicio.costo * rentaData.meses_a_pagar,
           userEmail: user.email,
           id_empresa: user.id_empresa,
         });

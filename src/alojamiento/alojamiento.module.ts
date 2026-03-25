@@ -11,6 +11,7 @@ import { Propietario } from 'src/propietarios/entities/propietario.entity';
 import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamiento_servicio.entity';
 import { Foto } from 'src/fotos/entities/foto.entity';
 import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
+import { Favorito } from 'src/favorito/entities/favorito.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
       AlojamientoServicio,
       Foto,
       Calificacion,
+      Favorito,
     ]),
   ],
   controllers: [AlojamientoController],

@@ -21,6 +21,7 @@ import { Renta } from 'src/renta/entities/renta.entity';
 import { TipoRenta } from 'src/common/enums/tipoRenta.enum';
 import { Foto } from 'src/fotos/entities/foto.entity';
 import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
+import { Favorito } from 'src/favorito/entities/favorito.entity';
 @Entity('alojamientos')
 export class Alojamiento {
   @PrimaryGeneratedColumn()
@@ -111,4 +112,7 @@ export class Alojamiento {
 
   @UpdateDateColumn()
   UpdatedAt: Date;
+
+  @OneToMany(() => Favorito, (favorito) => favorito.alojamiento)
+  favoritos: Favorito[];
 }

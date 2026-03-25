@@ -71,6 +71,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       name: user.name,
+      id: user.id,
       id_empresa: user.empresa ? user.empresa.id_empresa : null, // Asegúrate de que aquí no sea undefined
     };
 

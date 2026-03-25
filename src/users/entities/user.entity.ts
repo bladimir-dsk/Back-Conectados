@@ -19,6 +19,7 @@ import { TerminosCondicione } from 'src/terminos-condiciones/entities/terminos-c
 import { Politica } from 'src/politica/entities/politica.entity';
 import { Estatus } from 'src/common/enums/estatus.enum';
 import { StudentInformation } from 'src/student-information/entities/student-information.entity';
+import { Favorito } from 'src/favorito/entities/favorito.entity';
 
 @Entity()
 export class User {
@@ -97,4 +98,7 @@ export class User {
     (studentInformation) => studentInformation.user,
   )
   studentInformations: StudentInformation[];
+
+  @OneToMany(() => Favorito, (favorito) => favorito.user)
+  favoritos: Favorito[];
 }
