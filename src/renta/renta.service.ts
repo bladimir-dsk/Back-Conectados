@@ -1399,7 +1399,31 @@ export class RentaService {
     const [rentas, total] = await query.getManyAndCount();
 
     const hoy = new Date();
-
+    const resolverUbicacion = (renta: Renta) => {
+      switch (renta.tipo_renta) {
+        case TipoRenta.ALOJAMIENTO_COMPLETO:
+          return {
+            tipo: 'Alojamiento completo',
+            nombre: renta.alojamiento?.name ?? null,
+            direccion: renta.alojamiento?.address ?? null,
+            detalle: null,
+          };
+        case TipoRenta.CUARTO:
+          return {
+            tipo: 'Cuarto',
+            nombre: renta.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cuarto?.name ?? 'N/A'}`,
+          };
+        case TipoRenta.CAMA:
+          return {
+            tipo: 'Cama',
+            nombre: renta.cama?.cuarto?.alojamiento?.name ?? null,
+            direccion: renta.cama?.cuarto?.alojamiento?.address ?? null,
+            detalle: `Cuarto: ${renta.cama?.cuarto?.name ?? 'N/A'} | Cama: ${renta.cama?.name ?? 'N/A'}`,
+          };
+      }
+    };
     const calcularDiasRestantes = (fechaSalida: Date): number => {
       const diff = new Date(fechaSalida).getTime() - hoy.getTime();
       return Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -1434,10 +1458,12 @@ export class RentaService {
         id_renta: renta.id_renta,
         estado_renta: renta.estado,
         tipo_renta: renta.tipo_renta,
+        ubicacion: resolverUbicacion(renta),
 
         cliente: {
           nombre: renta.user?.name ?? 'N/A',
           email: renta.userEmail ?? 'N/A',
+          phone: renta.user?.phone ?? 'N/A',
         },
 
         fechas: {
@@ -1446,6 +1472,7 @@ export class RentaService {
           dias_restantes: dias >= 0 ? dias : null,
           dias_vencida: dias < 0 ? Math.abs(dias) : null,
           vence_pronto: dias <= 7 && dias >= 0,
+          meses_contratados: renta.meses_pagados,
         },
 
         financiero: {
