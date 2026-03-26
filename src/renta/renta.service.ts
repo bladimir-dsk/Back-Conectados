@@ -1273,7 +1273,7 @@ export class RentaService {
   }
 
   async reporteControlFinanciero(
-    id_propietario: number | undefined, // 👈 opcional
+    id_propietario: number | undefined,
     user: UserActiveInterface,
     filtros?: {
       fechaDesde?: Date;
@@ -1282,14 +1282,15 @@ export class RentaService {
       estadoPago?: EstadoPago;
       tipo_renta?: TipoRenta;
     },
+    page?: number,
+    limit?: number,
   ) {
-    // 1. Obtener alojamientos — si no hay propietario, trae todos los de la empresa
+    // 1. Obtener alojamientos
     const whereAlojamiento: any = {
       empresa: { id_empresa: user.id_empresa },
     };
 
     if (id_propietario) {
-      // 👈 solo filtra si viene el id
       whereAlojamiento.propietario = { id_propietario };
     }
 
@@ -1302,13 +1303,13 @@ export class RentaService {
       throw new NotFoundException(
         id_propietario
           ? 'No se encontraron alojamientos para este propietario'
-          : 'No se encontraron alojamientos para esta empresa', // 👈 mensaje contextual
+          : 'No se encontraron alojamientos para esta empresa',
       );
     }
 
     const idsAlojamientos = alojamientos.map((a) => a.id_alojamiento);
 
-    // 2. Subqueries para cuartos y camas (TypeORM resuelve el nombre real de tabla)
+    // 2. Subqueries
     const subqueryCuartos = this.cuartoRepository
       .createQueryBuilder('c')
       .select('c.id_cuarto')
@@ -1318,28 +1319,26 @@ export class RentaService {
       .createQueryBuilder('cm')
       .select('cm.id_cama')
       .innerJoin('cm.cuarto', 'cuarto_cm')
-      .where('cuarto_cm.id_alojamiento IN (:...ids)', { ids: idsAlojamientos });
+      .where('cuarto_cm.id_alojamiento IN (:...ids)', {
+        ids: idsAlojamientos,
+      });
 
-    // 3. Query principal de rentas con todos los datos necesarios
+    // 3. Query base
     const query = this.rentaRepository
       .createQueryBuilder('renta')
-      // Cliente que renta
       .leftJoinAndSelect('renta.user', 'cliente')
-      // Pagos
       .leftJoinAndSelect('renta.pagos', 'pago')
-      // Ubicación alojamiento completo
       .leftJoinAndSelect('renta.alojamiento', 'alojamiento')
-      // Ubicación cuarto
       .leftJoinAndSelect('renta.cuarto', 'cuarto')
       .leftJoinAndSelect('cuarto.alojamiento', 'alojamiento_cuarto')
-      // Ubicación cama
       .leftJoinAndSelect('renta.cama', 'cama')
       .leftJoinAndSelect('cama.cuarto', 'cuarto_cama')
       .leftJoinAndSelect('cuarto_cama.alojamiento', 'alojamiento_cama')
-      // Servicios contratados
       .leftJoinAndSelect('renta.rentaServicios', 'rs')
       .leftJoinAndSelect('rs.servicio', 'servicio')
-      .where('renta.empresa = :idEmpresa', { idEmpresa: user.id_empresa })
+      .where('renta.empresa = :idEmpresa', {
+        idEmpresa: user.id_empresa,
+      })
       .andWhere(
         `(
         renta.id_alojamiento IN (:...idsAloj)
@@ -1353,27 +1352,31 @@ export class RentaService {
         },
       );
 
-    // 4. Filtros opcionales
+    // 4. Filtros
     if (filtros?.estadoRenta) {
       query.andWhere('renta.estado = :estadoRenta', {
         estadoRenta: filtros.estadoRenta,
       });
     }
+
     if (filtros?.tipo_renta) {
       query.andWhere('renta.tipo_renta = :tipoRenta', {
         tipoRenta: filtros.tipo_renta,
       });
     }
+
     if (filtros?.fechaDesde) {
       query.andWhere('renta.fecha_entrada >= :desde', {
         desde: filtros.fechaDesde,
       });
     }
+
     if (filtros?.fechaHasta) {
       query.andWhere('renta.fecha_salida <= :hasta', {
         hasta: filtros.fechaHasta,
       });
     }
+
     if (filtros?.estadoPago) {
       query.andWhere('pago.estado = :estadoPago', {
         estadoPago: filtros.estadoPago,
@@ -1382,9 +1385,19 @@ export class RentaService {
 
     query.orderBy('renta.fecha_entrada', 'DESC');
 
-    const rentas = await query.getMany();
+    // 🔥 CLONAR QUERY PARA RESUMEN GLOBAL
+    const baseQuery = query.clone();
 
-    // 5. Calcular días restantes o días vencidos
+    // 🔥 TODAS LAS RENTAS (SIN PAGINACIÓN)
+    const allRentas = await baseQuery.getMany();
+
+    // 📄 RENTAS PAGINADAS (solo tabla)
+    if (page && limit) {
+      query.skip((page - 1) * limit).take(limit);
+    }
+
+    const [rentas, total] = await query.getManyAndCount();
+
     const hoy = new Date();
 
     const calcularDiasRestantes = (fechaSalida: Date): number => {
@@ -1392,83 +1405,17 @@ export class RentaService {
       return Math.ceil(diff / (1000 * 60 * 60 * 24));
     };
 
-    const calcularEstadoVencimiento = (
-      renta: Renta,
-    ): {
-      dias_restantes: number | null;
-      dias_vencida: number | null;
-      vence_pronto: boolean; // true si vence en los próximos 7 días
-      texto_estado: string;
-    } => {
-      if (renta.estado !== EstadoRenta.ACTIVA) {
-        return {
-          dias_restantes: null,
-          dias_vencida: null,
-          vence_pronto: false,
-          texto_estado: `Renta ${renta.estado.toLowerCase()}`,
-        };
-      }
-
-      const dias = calcularDiasRestantes(renta.fecha_salida);
-
-      if (dias < 0) {
-        return {
-          dias_restantes: null,
-          dias_vencida: Math.abs(dias),
-          vence_pronto: false,
-          texto_estado: `Vencida hace ${Math.abs(dias)} día(s)`,
-        };
-      }
-
-      return {
-        dias_restantes: dias,
-        dias_vencida: null,
-        vence_pronto: dias <= 7,
-        texto_estado:
-          dias === 0
-            ? 'Vence hoy'
-            : dias <= 7
-              ? `⚠️ Vence en ${dias} día(s)`
-              : `Vence en ${dias} día(s)`,
-      };
-    };
-
-    // 6. Resolver ubicación legible según tipo
-    const resolverUbicacion = (renta: Renta) => {
-      switch (renta.tipo_renta) {
-        case TipoRenta.ALOJAMIENTO_COMPLETO:
-          return {
-            tipo: 'Alojamiento completo',
-            nombre: renta.alojamiento?.name ?? null,
-            direccion: renta.alojamiento?.address ?? null,
-            detalle: null,
-          };
-
-        case TipoRenta.CUARTO:
-          return {
-            tipo: 'Cuarto',
-            nombre: renta.cuarto?.alojamiento?.name ?? null,
-            direccion: renta.cuarto?.alojamiento?.address ?? null,
-            detalle: `Cuarto: ${renta.cuarto?.name ?? 'N/A'}`,
-          };
-
-        case TipoRenta.CAMA:
-          return {
-            tipo: 'Cama',
-            nombre: renta.cama?.cuarto?.alojamiento?.name ?? null,
-            direccion: renta.cama?.cuarto?.alojamiento?.address ?? null,
-            detalle: `Cuarto: ${renta.cama?.cuarto?.name ?? 'N/A'} | Cama: ${renta.cama?.name ?? 'N/A'}`,
-          };
-      }
-    };
-
-    // 7. Mapear cada renta con su detalle completo
-    const detalleRentas = rentas.map((renta) => {
+    const mapRenta = (renta: Renta) => {
       const pagoCompletado = renta.pagos?.find(
         (p) => p.estado === EstadoPago.COMPLETADO,
       );
+
       const pagoPendiente = renta.pagos?.find(
         (p) => p.estado === EstadoPago.PENDIENTE,
+      );
+
+      const pagoCancelado = renta.pagos?.find(
+        (p) => p.estado === EstadoPago.CANCELADO,
       );
 
       const servicios = (renta.rentaServicios ?? []).map((rs) => ({
@@ -1477,137 +1424,101 @@ export class RentaService {
       }));
 
       const totalServicios = servicios.reduce((acc, s) => acc + s.precio, 0);
+
       const subtotalAlojamiento =
         Number(renta.precio_mensual) * renta.meses_pagados;
-      const vencimiento = calcularEstadoVencimiento(renta);
+
+      const dias = calcularDiasRestantes(renta.fecha_salida);
 
       return {
-        // —— Identificadores ——
         id_renta: renta.id_renta,
         estado_renta: renta.estado,
         tipo_renta: renta.tipo_renta,
 
-        // —— Cliente (inquilino) ——
         cliente: {
-          id_usuario: renta.user?.id ?? renta.id_usuario,
-          nombre: renta.user
-            ? `${renta.user.name ?? ''} ${renta.user.firstName ?? ''}`.trim()
-            : 'N/A',
-          email: renta.userEmail ?? renta.user?.email ?? 'N/A',
-          telefono: renta.user?.phone ?? null, // ajusta al campo real de tu User
+          nombre: renta.user?.name ?? 'N/A',
+          email: renta.userEmail ?? 'N/A',
         },
 
-        // —— Ubicación ——
-        ubicacion: resolverUbicacion(renta),
-
-        // —— Fechas ——
         fechas: {
           entrada: renta.fecha_entrada,
           salida: renta.fecha_salida,
-          meses_contratados: renta.meses_pagados,
-          registrada_el: renta.created_at,
-          ...vencimiento,
+          dias_restantes: dias >= 0 ? dias : null,
+          dias_vencida: dias < 0 ? Math.abs(dias) : null,
+          vence_pronto: dias <= 7 && dias >= 0,
         },
 
-        // —— Financiero ——
         financiero: {
-          precio_mensual: Number(renta.precio_mensual),
           subtotal_alojamiento: subtotalAlojamiento,
-          servicios_adicionales: servicios,
           total_servicios: totalServicios,
           monto_total: Number(renta.monto_total),
 
-          pago_completado: pagoCompletado
-            ? {
-                id_pago: pagoCompletado.id,
-                monto: Number(pagoCompletado.monto),
-                metodo: pagoCompletado.metodo_pago ?? 'stripe',
-                fecha_pago: pagoCompletado.fecha_pago,
-                transaccion_id: pagoCompletado.transaccion_id ?? null,
-                stripe_id: pagoCompletado.stripe_payment_intent_id ?? null,
-              }
-            : null,
+          pago_completado: pagoCompletado ? Number(pagoCompletado.monto) : null,
 
-          pago_pendiente: pagoPendiente
-            ? {
-                id_pago: pagoPendiente.id,
-                monto: Number(pagoPendiente.monto),
-                stripe_id: pagoPendiente.stripe_payment_intent_id ?? null,
-              }
-            : null,
+          pago_pendiente: pagoPendiente ? Number(pagoPendiente.monto) : null,
+
+          pago_cancelado: pagoCancelado ? Number(pagoCancelado.monto) : null,
         },
       };
-    });
+    };
 
-    // 8. Resumen financiero global
-    const rentasActivas = detalleRentas.filter(
-      (r) => r.estado_renta === EstadoRenta.ACTIVA,
-    );
-    const rentasFinalizadas = detalleRentas.filter(
-      (r) => r.estado_renta === EstadoRenta.FINALIZADA,
-    );
-    const rentasCanceladas = detalleRentas.filter(
-      (r) => r.estado_renta === EstadoRenta.CANCELADA,
-    );
-    const proximasAVencer = rentasActivas.filter((r) => r.fechas.vence_pronto);
+    // 🔥 GLOBAL
+    const detalleGlobal = allRentas.map(mapRenta);
 
-    const ingresosTotales = detalleRentas
-      .filter((r) => r.financiero.pago_completado)
-      .reduce((acc, r) => acc + Number(r.financiero.monto_total), 0);
+    // 📄 TABLA
+    const detallePaginado = rentas.map(mapRenta);
 
-    const ingresosSoloAlojamiento = detalleRentas
-      .filter((r) => r.financiero.pago_completado)
-      .reduce((acc, r) => acc + r.financiero.subtotal_alojamiento, 0);
+    // 📊 RESUMEN GLOBAL
+    const resumen = {
+      total_rentas: detalleGlobal.length,
+      activas: detalleGlobal.filter(
+        (r) => r.estado_renta === EstadoRenta.ACTIVA,
+      ).length,
+      finalizadas: detalleGlobal.filter(
+        (r) => r.estado_renta === EstadoRenta.FINALIZADA,
+      ).length,
+      canceladas: detalleGlobal.filter(
+        (r) => r.estado_renta === EstadoRenta.CANCELADA,
+      ).length,
+      proximas_a_vencer: detalleGlobal.filter((r) => r.fechas.vence_pronto)
+        .length,
 
-    const ingresosSoloServicios = detalleRentas
-      .filter((r) => r.financiero.pago_completado)
-      .reduce((acc, r) => acc + r.financiero.total_servicios, 0);
+      ingresos_totales_cobrados: detalleGlobal
+        .filter((r) => r.financiero.pago_completado)
+        .reduce((acc, r) => acc + r.financiero.monto_total, 0),
 
-    const montosPendientes = detalleRentas
-      .filter((r) => r.financiero.pago_pendiente)
-      .reduce(
-        (acc, r) => acc + Number(r.financiero.pago_pendiente?.monto ?? 0),
-        0,
-      );
+      ingresos_alojamiento: detalleGlobal
+        .filter((r) => r.financiero.pago_completado)
+        .reduce((acc, r) => acc + r.financiero.subtotal_alojamiento, 0),
+
+      ingresos_servicios_adicionales: detalleGlobal
+        .filter((r) => r.financiero.pago_completado)
+        .reduce((acc, r) => acc + r.financiero.total_servicios, 0),
+
+      montos_pendientes_por_cobrar: detalleGlobal
+        .filter((r) => r.financiero.pago_pendiente)
+        .reduce((acc, r) => acc + (r.financiero.pago_pendiente ?? 0), 0),
+    };
 
     return {
-      // —— Encabezado ——
       id_propietario,
       fecha_reporte: hoy,
-      alojamientos_gestionados: alojamientos.map((a) => ({
-        id: a.id_alojamiento,
-        nombre: a.name,
-        direccion: a.address,
-      })),
 
-      // —— Resumen ejecutivo ——
-      resumen: {
-        total_rentas: detalleRentas.length,
-        activas: rentasActivas.length,
-        finalizadas: rentasFinalizadas.length,
-        canceladas: rentasCanceladas.length,
-        proximas_a_vencer: proximasAVencer.length, // vencen en ≤ 7 días
+      paginacion:
+        page && limit
+          ? {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+            }
+          : null,
 
-        ingresos_totales_cobrados: ingresosTotales,
-        ingresos_alojamiento: ingresosSoloAlojamiento,
-        ingresos_servicios_adicionales: ingresosSoloServicios,
-        montos_pendientes_por_cobrar: montosPendientes,
-      },
+      alojamientos_gestionados: alojamientos,
 
-      // —— Alertas ——
-      alertas: {
-        rentas_proximas_a_vencer: proximasAVencer.map((r) => ({
-          id_renta: r.id_renta,
-          cliente: r.cliente.nombre,
-          email: r.cliente.email,
-          ubicacion: `${r.ubicacion.nombre} - ${r.ubicacion.detalle ?? r.ubicacion.tipo}`,
-          fecha_salida: r.fechas.salida,
-          dias_restantes: r.fechas.dias_restantes,
-        })),
-      },
+      resumen,
 
-      // —— Detalle completo ——
-      rentas: detalleRentas,
+      rentas: page && limit ? detallePaginado : detalleGlobal,
     };
   }
 
