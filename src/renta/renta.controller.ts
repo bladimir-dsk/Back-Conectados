@@ -84,20 +84,22 @@ export class RentaController {
   @ApiQuery({ name: 'estado', required: false, type: String })
   @ApiQuery({ name: 'estadoPago', required: false, type: String })
   @ApiQuery({ name: 'tipo_renta', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number }) // 👈 NUEVO
+  @ApiQuery({ name: 'limit', required: false, type: Number }) // 👈 NUEVO
   async reporteControlFinanciero(
-    @Query('id') id?: string, // 👈 string | undefined
+    @Query('id') id?: string,
     @ActiveUser() user?: UserActiveInterface,
     @Query('fechaDesde') fechaDesde?: string,
     @Query('fechaHasta') fechaHasta?: string,
     @Query('estado') estado?: EstadoRenta,
     @Query('estadoPago') estadoPago?: EstadoPago,
     @Query('tipo_renta') tipo_renta?: TipoRenta,
+    @Query('page') page?: string, // 👈 NUEVO
+    @Query('limit') limit?: string, // 👈 NUEVO
   ) {
-    // Si viene id, lo parseamos y validamos; si no viene, queda undefined
     let idPropietario: number | undefined;
 
     if (id !== undefined) {
-      // 👈 solo valida si realmente viene
       idPropietario = Number(id);
       if (isNaN(idPropietario)) {
         throw new BadRequestException(
@@ -106,13 +108,19 @@ export class RentaController {
       }
     }
 
-    return this.rentaService.reporteControlFinanciero(idPropietario, user, {
-      fechaDesde: fechaDesde ? new Date(fechaDesde) : undefined,
-      fechaHasta: fechaHasta ? new Date(fechaHasta) : undefined,
-      estadoRenta: estado,
-      estadoPago,
-      tipo_renta,
-    });
+    return this.rentaService.reporteControlFinanciero(
+      idPropietario,
+      user,
+      {
+        fechaDesde: fechaDesde ? new Date(fechaDesde) : undefined,
+        fechaHasta: fechaHasta ? new Date(fechaHasta) : undefined,
+        estadoRenta: estado,
+        estadoPago,
+        tipo_renta,
+      },
+      page ? Number(page) : undefined, // 👈 AQUÍ
+      limit ? Number(limit) : undefined, // 👈 AQUÍ
+    );
   }
   @Get('pagos')
   @Auth([Role.ESTUDIANTE])

@@ -9,6 +9,7 @@ import {
   UploadedFile,
   UseInterceptors,
   Req,
+  Query,
 } from '@nestjs/common';
 import { DocumentacionService } from './documentacion.service';
 import { CreateDocumentacionDto } from './dto/create-documentacion.dto';
@@ -62,8 +63,32 @@ export class DocumentacionController {
 
   @Get()
   @Auth([Role.ESTUDIANTE, Role.ADMIN])
-  findAll(@Req() req: any) {
-    return this.documentacionService.findAll(req.user);
+  findAll(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.documentacionService.findAll(
+      user,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @Get('grouped')
+  @Auth([Role.ESTUDIANTE, Role.ADMIN])
+  findAllGroupedByUser(
+    @ActiveUser() user: UserActiveInterface,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('name') name?: string,
+  ) {
+    return this.documentacionService.findAllGroupedByUser(
+      user,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+      name,
+    );
   }
 
   @Get('status/approved')

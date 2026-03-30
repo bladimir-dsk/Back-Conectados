@@ -18,6 +18,7 @@ import { AlojamientoServicio } from 'src/alojamiento_servicios/entities/alojamie
 import { Calificacion } from 'src/calificacion/entities/calificacion.entity';
 import { EstadoAlojamiento } from 'src/common/enums/estadoAlojamiento.enum';
 import { Favorito } from 'src/favorito/entities/favorito.entity';
+import { EstadoPropietario } from 'src/common/enums/estadoPropietario.enum';
 
 @Injectable()
 export class AlojamientoService {
@@ -87,6 +88,11 @@ export class AlojamientoService {
 
     if (!propietario) {
       throw new NotAcceptableException('Propietario no encontrado');
+    }
+
+    //validar que el estatus del propietario no esta verificado no dejar crear
+    if (propietario.estatus !== EstadoPropietario.VERIFICADO) {
+      throw new NotAcceptableException('Propietario no verificado');
     }
 
     const existingAlojamiento = await this.alojamientoRepository.findOne({
@@ -330,6 +336,14 @@ export class AlojamientoService {
     if (!alojamiento) {
       throw new NotAcceptableException('Alojamiento no encontrado');
     }
+    if (
+      alojamiento.propietario.estatus !== EstadoPropietario.VERIFICADO &&
+      user.role !== Role.ADMIN
+    ) {
+      throw new BadRequestException(
+        'No se puede actualizar el alojamiento porque el propietario no está verificado',
+      );
+    }
 
     //validar si el alojamiento esta en ocupado no se pueda cambiar el tipo
     if (alojamiento.estatus === EstadoAlojamiento.OCUPADO) {
@@ -358,6 +372,13 @@ export class AlojamientoService {
       if (!propietario) {
         throw new NotAcceptableException('Propietario no encontrado');
       }
+
+      //validar que el estatus del propietario no esta verificado no dejar actualizar
+      console.log('propietario.estatus', propietario.estatus);
+      if (propietario.estatus !== EstadoPropietario.VERIFICADO) {
+        throw new BadRequestException('Propietario no verificado');
+      }
+
       alojamiento.propietario = propietario;
     }
 
